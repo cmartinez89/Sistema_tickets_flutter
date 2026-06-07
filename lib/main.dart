@@ -21,8 +21,8 @@ class SoporteBetaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0D47A1),
-          primary: const Color(0xFF0D47A1),
+          seedColor: const Color(0xFF00695C), // Verde oscuro
+          primary: const Color(0xFF00695C),
         ),
         useMaterial3: true,
       ),
@@ -245,7 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Soporte Beta',
+                        'Soporte Beta v1.1',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -551,7 +551,7 @@ class DashboardScreen extends StatelessWidget {
 }
 
 // ============================================================================
-// PANTALLA: GESTIÓN DE TICKETS (Conecta PUT a AWS)
+// PANTALLA: GESTIÓN DE TICKETS (Conecta PUT a AWS y usa Filtros)
 // ============================================================================
 class TicketsScreen extends StatefulWidget {
   final List<Ticket> tickets;
@@ -574,6 +574,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
   final _descController = TextEditingController();
   String _prioridadSeleccionada = 'Media';
   String _asignadoPorDefecto = 'Sin Asignar';
+
+  // Variable de control para el filtro
+  String _filtroActual = 'Activos';
 
   void _openNewTicketDialog() {
     _usuarioController.clear();
@@ -767,6 +770,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 1. Filtrar por permisos (Admin ve todos, Técnico ve los suyos)
     List<Ticket> filtrados = widget.session.rol == 'Admin'
         ? widget.tickets
         : widget.tickets
@@ -777,6 +781,14 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     t.asignadoA == widget.session.nombreCompleto,
               )
               .toList();
+
+    // 2. Aplicar el filtro de estatus seleccionado
+    if (_filtroActual == 'Activos') {
+      filtrados = filtrados.where((t) => t.estado != 'Resuelto').toList();
+    } else if (_filtroActual == 'Resueltos') {
+      filtrados = filtrados.where((t) => t.estado == 'Resuelto').toList();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: Padding(
@@ -800,6 +812,39 @@ class _TicketsScreenState extends State<TicketsScreen> {
                   label: const Text('Nuevo'),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            // Fila de botones para seleccionar el filtro
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: ['Activos', 'Resueltos', 'Todos']
+                    .map(
+                      (filtro) => Padding(
+                        padding: const EdgeInsets.only(right: 8.0),
+                        child: ChoiceChip(
+                          label: Text(
+                            filtro,
+                            style: TextStyle(
+                              fontWeight: _filtroActual == filtro
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                          selected: _filtroActual == filtro,
+                          onSelected: (bool selected) {
+                            if (selected) {
+                              setState(() => _filtroActual = filtro);
+                            }
+                          },
+                          selectedColor: Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -838,9 +883,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(
-                            ticket.estado,
-                          ).withValues(alpha: 0.12),
+                          color: _getStatusColor(ticket.estado).withAlpha(30),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -1437,7 +1480,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: DataTable(
-                    headingRowColor: MaterialStateProperty.all(
+                    headingRowColor: WidgetStateProperty.all(
                       Colors.grey.shade200,
                     ),
                     columns: const [
