@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
+
+// ============================================================================
+// CONFIGURACIÓN DE RED (Reemplaza con la IP pública de tu instancia EC2)
+// ============================================================================
+const String API_URL = 'http://54.161.41.131:8000';
 
 void main() {
   runApp(const SoporteBetaApp());
@@ -27,7 +32,7 @@ class SoporteBetaApp extends StatelessWidget {
 }
 
 // ============================================================================
-// MODELOS DE DATOS: TICKETS, INVENTARIO UNIFICADO Y SESIÓN
+// MODELOS DE DATOS
 // ============================================================================
 class Ticket {
   final String id;
@@ -49,17 +54,6 @@ class Ticket {
     required this.asignadoA,
     required this.fecha,
   });
-
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'usuario': usuario,
-    'departamento': departamento,
-    'descripcion': descripcion,
-    'prioridad': prioridad,
-    'estado': estado,
-    'asignadoA': asignadoA,
-    'fecha': fecha.toIso8601String(),
-  };
 
   factory Ticket.fromMap(Map<String, dynamic> map) => Ticket(
     id: map['id'],
@@ -87,8 +81,6 @@ class Equipo {
   String estatus;
   String? empleadoAsignado;
   String? rolEmpleado;
-
-  // Campos unificados para el control de respaldos y conectividad
   String ubicacion;
   String anydesk;
   String rustdesk;
@@ -129,27 +121,6 @@ class Equipo {
     return valorAdquisicion * factorDepreciacion;
   }
 
-  Map<String, dynamic> toMap() => {
-    'id': id,
-    'folioResponsiva': folioResponsiva,
-    'tipo': tipo,
-    'marca': marca,
-    'modelo': modelo,
-    'noSerie': noSerie,
-    'accesorios': accesorios,
-    'anoAdquisicion': anoAdquisicion,
-    'valorAdquisicion': valorAdquisicion,
-    'specifications': specifications,
-    'estatus': estatus,
-    'empleadoAsignado': empleadoAsignado,
-    'rolEmpleado': rolEmpleado,
-    'ubicacion': ubicacion,
-    'anydesk': anydesk,
-    'rustdesk': rustdesk,
-    'ultimoRespaldo': ultimoRespaldo?.toIso8601String(),
-    'comentarios': comentarios,
-  };
-
   factory Equipo.fromMap(Map<String, dynamic> map) => Equipo(
     id: map['id'],
     folioResponsiva: map['folioResponsiva'],
@@ -159,7 +130,7 @@ class Equipo {
     noSerie: map['noSerie'],
     accesorios: map['accesorios'],
     anoAdquisicion: map['anoAdquisicion'],
-    valorAdquisicion: map['valorAdquisicion'].toDouble(),
+    valorAdquisicion: (map['valorAdquisicion'] ?? 0).toDouble(),
     specifications: map['specifications'] ?? '',
     estatus: map['estatus'],
     empleadoAsignado: map['empleadoAsignado'],
@@ -186,7 +157,7 @@ class Session {
 }
 
 // ============================================================================
-// PANTALLA: LOGIN
+// PANTALLA: LOGIN (CONECTADA A AWS)
 // ============================================================================
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -198,48 +169,52 @@ class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
       String user = _usernameController.text.trim().toLowerCase();
       String pass = _passwordController.text;
-      Session? sesionActual;
 
-      if (user == 'carlos' && pass == 'beta123') {
-        sesionActual = Session(
-          username: 'carlos',
-          nombreCompleto: 'Carlos',
-          rol: 'Admin',
+      try {
+        final response = await http.post(
+          Uri.parse('$API_URL/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': user, 'password': pass}),
         );
-      } else if (user == 'benjamin' && pass == 'soporte2026') {
-        sesionActual = Session(
-          username: 'benjamin',
-          nombreCompleto: 'Benjamín Castro',
-          rol: 'Admin',
-        );
-      } else if (user == 'julio' && pass == 'julio123') {
-        sesionActual = Session(
-          username: 'julio',
-          nombreCompleto: 'Julio Montelongo',
-          rol: 'Tecnico',
-        );
-      }
 
-      if (sesionActual != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => MainLayout(session: sesionActual!),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Credenciales incorrectas'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          Session sesionActual = Session(
+            username: data['username'],
+            nombreCompleto: data['nombreCompleto'],
+            rol: data['rol'],
+          );
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MainLayout(session: sesionActual),
+              ),
+            );
+          }
+        } else {
+          _mostrarError('Credenciales incorrectas o usuario no encontrado');
+        }
+      } catch (e) {
+        _mostrarError('Error de conexión con el servidor AWS: $e');
+      } finally {
+        setState(() => _isLoading = false);
       }
+    }
+  }
+
+  void _mostrarError(String mensaje) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(mensaje), backgroundColor: Colors.redAccent),
+      );
     }
   }
 
@@ -264,7 +239,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     children: [
                       Icon(
-                        Icons.security_rounded,
+                        Icons.cloud_sync_rounded,
                         size: 64,
                         color: Theme.of(context).colorScheme.primary,
                       ),
@@ -277,8 +252,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const Text(
-                        'Autenticación de Personal TI',
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                        'Conectado a AWS Cloud',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 32),
                       TextFormField(
@@ -303,14 +282,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: _handleLogin,
+                          onPressed: _isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Theme.of(
                               context,
                             ).colorScheme.primary,
                             foregroundColor: Colors.white,
                           ),
-                          child: const Text('Ingresar'),
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
+                              : const Text('Ingresar'),
                         ),
                       ),
                     ],
@@ -326,7 +309,7 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // ============================================================================
-// ESTRUCTURA BASE Y CONTROL DE DATOS LOCALES
+// ESTRUCTURA BASE Y CONTROL DE DATOS (NUBE)
 // ============================================================================
 class MainLayout extends StatefulWidget {
   final Session session;
@@ -344,201 +327,39 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   void initState() {
     super.initState();
-    _cargarDatosDeMemoria();
+    _cargarDatosDeAPI();
   }
 
-  Future<void> _cargarDatosDeMemoria() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? ticketsString = prefs.getString('historial_tickets');
-    final String? inventarioString = prefs.getString('inventario_equipos');
+  Future<void> _cargarDatosDeAPI() async {
+    try {
+      final ticketsRes = await http.get(Uri.parse('$API_URL/tickets'));
+      final equiposRes = await http.get(Uri.parse('$API_URL/equipos'));
 
-    setState(() {
-      if (ticketsString != null) {
-        final List<dynamic> decoded = jsonDecode(ticketsString);
-        _ticketsGlobales = decoded.map((item) => Ticket.fromMap(item)).toList();
-      } else {
-        _ticketsGlobales = [
-          Ticket(
-            id: 'TK-101',
-            usuario: 'Luis Fabela',
-            departamento: 'Desarrollo',
-            descripcion: 'Falla de red en nodo principal on-premise',
-            prioridad: 'Alta',
-            estado: 'En Proceso',
-            asignadoA: 'Carlos',
-            fecha: DateTime.now(),
-          ),
-          Ticket(
-            id: 'TK-102',
-            usuario: 'Gaby Gomez',
-            departamento: 'Administración',
-            descripcion: 'Error de timbrado en factura SAT',
-            prioridad: 'Alta',
-            estado: 'Pendiente',
-            asignadoA: 'Julio',
-            fecha: DateTime.now(),
-          ),
-          Ticket(
-            id: 'TK-103',
-            usuario: 'Operaciones',
-            departamento: 'Embarques',
-            descripcion: 'Impresora térmica de etiquetas no responde',
-            prioridad: 'Media',
-            estado: 'Pendiente',
-            asignadoA: 'Julio',
-            fecha: DateTime.now(),
-          ),
-          Ticket(
-            id: 'TK-104',
-            usuario: 'Ventas',
-            departamento: 'Mostrador',
-            descripcion: 'Configuración de VPN remota para sucursal',
-            prioridad: 'Media',
-            estado: 'Resuelto',
-            asignadoA: 'Benjamin',
-            fecha: DateTime.now(),
-          ),
-        ];
+      if (ticketsRes.statusCode == 200 && equiposRes.statusCode == 200) {
+        final List<dynamic> ticketsJson = jsonDecode(ticketsRes.body);
+        final List<dynamic> equiposJson = jsonDecode(equiposRes.body);
+
+        setState(() {
+          _ticketsGlobales = ticketsJson
+              .map((item) => Ticket.fromMap(item))
+              .toList();
+          _inventarioGlobal = equiposJson
+              .map((item) => Equipo.fromMap(item))
+              .toList();
+          _cargando = false;
+        });
       }
-
-      if (inventarioString != null) {
-        final List<dynamic> decodedInv = jsonDecode(inventarioString);
-        _inventarioGlobal = decodedInv
-            .map((item) => Equipo.fromMap(item))
-            .toList();
-      } else {
-        // Inicialización con la lista completa y unificada cruzando los datos de tus pantallas
-        _inventarioGlobal = [
-          Equipo(
-            id: 'EQ-01',
-            folioResponsiva: '192',
-            tipo: 'Laptop',
-            marca: 'DELL',
-            modelo: 'Expertboock B1402',
-            noSerie: 'SANXCV12388143A',
-            accesorios: 'Cargador, Mochila',
-            anoAdquisicion: 2025,
-            valorAdquisicion: 18500.00,
-            specifications: 'RAM 16GB, SSD 512GB',
-            estatus: 'Asignado',
-            empleadoAsignado: 'Angel Gabriel Medina Ruiz',
-            rolEmpleado: 'Desarrollador',
-            ubicacion: 'Beta',
-            anydesk: '1 349 175 777',
-            rustdesk: '479 853 389',
-            ultimoRespaldo: DateTime(2026, 5, 28),
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar datos: $e'),
+            backgroundColor: Colors.red,
           ),
-          Equipo(
-            id: 'EQ-02',
-            folioResponsiva: '185',
-            tipo: 'Laptop',
-            marca: 'Lenovo',
-            modelo: 'ThinkPad E14',
-            noSerie: 'LNV99382173B',
-            accesorios: 'Cargador',
-            anoAdquisicion: 2024,
-            valorAdquisicion: 16200.00,
-            specifications: 'RAM 24GB, SSD 1TB',
-            estatus: 'Asignado',
-            empleadoAsignado: 'Benjamin Castro',
-            rolEmpleado: 'Encargado de Soporte',
-            ubicacion: 'ESM',
-            anydesk: '1 014 343 898',
-            rustdesk: '316 674 411',
-            ultimoRespaldo: DateTime(2026, 5, 29),
-          ),
-          Equipo(
-            id: 'EQ-03',
-            folioResponsiva: '---',
-            tipo: 'Servidor',
-            marca: 'HP',
-            modelo: 'ProLiant DL360',
-            noSerie: 'HPSRV883210X',
-            accesorios: 'Cable de poder, Rieles',
-            anoAdquisicion: 2023,
-            valorAdquisicion: 45000.00,
-            specifications: 'Xeon 16-Core, 64GB RAM',
-            estatus: 'Disponible',
-            empleadoAsignado: 'BETA 2',
-            ubicacion: 'Beta',
-            anydesk: '1 894 913 332',
-            rustdesk: '1 632 149 529',
-            comentarios: 'respaldo en aws',
-          ),
-          Equipo(
-            id: 'EQ-04',
-            folioResponsiva: '---',
-            tipo: 'Desktop',
-            marca: 'Generic',
-            modelo: 'Beta1',
-            noSerie: 'OLD-BETA1',
-            accesorios: 'Ninguno',
-            anoAdquisicion: 2021,
-            valorAdquisicion: 12000.00,
-            specifications: 'Core i3, 8GB RAM',
-            estatus: 'Disponible',
-            empleadoAsignado: 'BETA 1 viejo',
-            ubicacion: 'Beta',
-            comentarios: 'en resguardo sistemas',
-          ),
-          Equipo(
-            id: 'EQ-05',
-            folioResponsiva: '112',
-            tipo: 'Laptop',
-            marca: 'Lenovo',
-            modelo: 'Movil67',
-            noSerie: 'LNV882319A',
-            accesorios: 'Cargador',
-            anoAdquisicion: 2024,
-            valorAdquisicion: 15000.00,
-            specifications: 'Core i5, 16GB RAM',
-            estatus: 'Asignado',
-            empleadoAsignado: 'Horacio Martinez',
-            rolEmpleado: 'Operaciones',
-            ubicacion: 'ESM',
-            anydesk: '488 202 029',
-            rustdesk: '317 469 513',
-            ultimoRespaldo: DateTime(2026, 5, 14),
-            comentarios: 'incapacidad',
-          ),
-          Equipo(
-            id: 'EQ-06',
-            folioResponsiva: '115',
-            tipo: 'Laptop',
-            marca: 'DELL',
-            modelo: 'Christian-BETA',
-            noSerie: 'DLL442112B',
-            accesorios: 'Cargador',
-            anoAdquisicion: 2025,
-            valorAdquisicion: 17000.00,
-            specifications: 'Core i7, 16GB RAM',
-            estatus: 'Asignado',
-            empleadoAsignado: 'Julio Montelongo',
-            rolEmpleado: 'Soporte',
-            ubicacion: 'Beta',
-            rustdesk: '1264963993',
-            ultimoRespaldo: DateTime(2026, 5, 25),
-          ),
-        ];
+        );
       }
-      _cargando = false;
-    });
-  }
-
-  Future<void> _guardarTickets() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'historial_tickets',
-      jsonEncode(_ticketsGlobales.map((t) => t.toMap()).toList()),
-    );
-  }
-
-  Future<void> _guardarInventario() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'inventario_equipos',
-      jsonEncode(_inventarioGlobal.map((e) => e.toMap()).toList()),
-    );
+      setState(() => _cargando = false);
+    }
   }
 
   @override
@@ -553,7 +374,6 @@ class _MainLayoutState extends State<MainLayout> {
         session: widget.session,
         onTicketsChanged: () {
           setState(() {});
-          _guardarTickets();
         },
       ),
       EquipmentScreen(
@@ -561,16 +381,14 @@ class _MainLayoutState extends State<MainLayout> {
         session: widget.session,
         onInventarioChanged: () {
           setState(() {});
-          _guardarInventario();
         },
       ),
       PantallaRespaldos(
         inventario: _inventarioGlobal,
         onInventarioChanged: () {
           setState(() {});
-          _guardarInventario();
         },
-      ), // PASAMOS LA MISMA LISTA Y CALLBACK
+      ),
     ];
 
     return Scaffold(
@@ -586,6 +404,13 @@ class _MainLayoutState extends State<MainLayout> {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              setState(() => _cargando = true);
+              _cargarDatosDeAPI();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             onPressed: () => Navigator.pushReplacement(
@@ -688,7 +513,9 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     List<Ticket> visibles = session.rol == 'Admin'
         ? tickets
-        : tickets.where((t) => t.asignadoA == 'Julio').toList();
+        : tickets
+              .where((t) => t.asignadoA.toLowerCase() == session.username)
+              .toList();
     int activos = visibles.where((t) => t.estado != 'Resuelto').length;
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -724,7 +551,7 @@ class DashboardScreen extends StatelessWidget {
 }
 
 // ============================================================================
-// PANTALLA: GESTIÓN DE TICKETS
+// PANTALLA: GESTIÓN DE TICKETS (Conecta PUT a AWS)
 // ============================================================================
 class TicketsScreen extends StatefulWidget {
   final List<Ticket> tickets;
@@ -868,6 +695,13 @@ class _TicketsScreenState extends State<TicketsScreen> {
                   });
                   widget.onTicketsChanged();
                   Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Ticket registrado localmente (Falta endpoint POST)',
+                      ),
+                    ),
+                  );
                 }
               },
               child: const Text('Registrar'),
@@ -876,6 +710,46 @@ class _TicketsScreenState extends State<TicketsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _cambiarEstatusEnNube(Ticket ticket, String nuevoEstado) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$API_URL/tickets/${ticket.id}/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'estado': nuevoEstado}),
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          ticket.estado = nuevoEstado;
+        });
+        widget.onTicketsChanged();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al actualizar en AWS: $e')));
+    }
+  }
+
+  Future<void> _reasignarEnNube(Ticket ticket, String nuevoTecnico) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$API_URL/tickets/${ticket.id}/assign'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'asignadoA': nuevoTecnico}),
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          ticket.asignadoA = nuevoTecnico;
+        });
+        widget.onTicketsChanged();
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al reasignar en AWS: $e')));
+    }
   }
 
   Color _getStatusColor(String estado) {
@@ -895,7 +769,14 @@ class _TicketsScreenState extends State<TicketsScreen> {
   Widget build(BuildContext context) {
     List<Ticket> filtrados = widget.session.rol == 'Admin'
         ? widget.tickets
-        : widget.tickets.where((t) => t.asignadoA == 'Julio').toList();
+        : widget.tickets
+              .where(
+                (t) =>
+                    t.asignadoA.toLowerCase() ==
+                        widget.session.username.toLowerCase() ||
+                    t.asignadoA == widget.session.nombreCompleto,
+              )
+              .toList();
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: Padding(
@@ -1013,12 +894,11 @@ class _TicketsScreenState extends State<TicketsScreen> {
                                                 ),
                                               ),
                                               selected: ticket.estado == e,
-                                              onSelected: (_) {
-                                                setState(() {
-                                                  ticket.estado = e;
-                                                });
-                                                widget.onTicketsChanged();
-                                              },
+                                              onSelected: (_) =>
+                                                  _cambiarEstatusEnNube(
+                                                    ticket,
+                                                    e,
+                                                  ),
                                             ),
                                           ),
                                         )
@@ -1039,7 +919,14 @@ class _TicketsScreenState extends State<TicketsScreen> {
                                       ),
                                     ),
                                     DropdownButton<String>(
-                                      value: ticket.asignadoA,
+                                      value:
+                                          [
+                                            'Carlos',
+                                            'Benjamin',
+                                            'Julio',
+                                          ].contains(ticket.asignadoA)
+                                          ? ticket.asignadoA
+                                          : 'Sin Asignar',
                                       underline: Container(),
                                       style: const TextStyle(
                                         color: Colors.black87,
@@ -1062,10 +949,10 @@ class _TicketsScreenState extends State<TicketsScreen> {
                                               .toList(),
                                       onChanged: (nuevoTecnico) {
                                         if (nuevoTecnico != null) {
-                                          setState(() {
-                                            ticket.asignadoA = nuevoTecnico;
-                                          });
-                                          widget.onTicketsChanged();
+                                          _reasignarEnNube(
+                                            ticket,
+                                            nuevoTecnico,
+                                          );
                                         }
                                       },
                                     ),
@@ -1145,7 +1032,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               widget.onInventarioChanged();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Hardware liberado con éxito.')),
+                const SnackBar(content: Text('Hardware liberado localmente.')),
               );
             },
             child: const Text('Confirmar Baja'),
@@ -1253,9 +1140,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'Activo asignado y responsiva vinculada con éxito.',
-                    ),
+                    content: Text('Activo asignado localmente.'),
                     backgroundColor: Colors.teal,
                   ),
                 );
@@ -1286,7 +1171,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               ),
             ),
             Text(
-              '${widget.inventario.length} equipos en sistemas',
+              '${widget.inventario.length} equipos sincronizados desde AWS',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),
@@ -1474,7 +1359,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 }
 
 // ============================================================================
-// PANTALLA: CONTROL DE RESPALDOS INTERACTIVO (UNIFICADO)
+// PANTALLA: CONTROL DE RESPALDOS INTERACTIVO (CONECTADO A AWS)
 // ============================================================================
 class PantallaRespaldos extends StatefulWidget {
   final List<Equipo> inventario;
@@ -1491,6 +1376,39 @@ class PantallaRespaldos extends StatefulWidget {
 }
 
 class _PantallaRespaldosState extends State<PantallaRespaldos> {
+  Future<void> _actualizarFechaRespaldoEnNube(
+    Equipo equipo,
+    DateTime nuevaFecha,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$API_URL/equipos/${equipo.id}/backup'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'ultimoRespaldo': nuevaFecha.toIso8601String()}),
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          equipo.ultimoRespaldo = nuevaFecha;
+        });
+        widget.onInventarioChanged();
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Fecha de respaldo sincronizada con AWS'),
+            ),
+          );
+      }
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al sincronizar con AWS: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1507,7 +1425,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
             ),
           ),
           const Text(
-            'Presiona el icono de calendario en la fecha para actualizar el último respaldo.',
+            'Presiona el icono de calendario en la fecha para actualizar el último respaldo en la nube.',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 12),
@@ -1605,7 +1523,6 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                           DataCell(Text(equipo.modelo)),
                           DataCell(Text(equipo.anydesk)),
                           DataCell(Text(equipo.rustdesk)),
-                          // Celda de Fecha con botón interactivo para modificarla
                           DataCell(
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -1617,8 +1534,8 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                                 const SizedBox(width: 4),
                                 IconButton(
                                   icon: const Icon(
-                                    Icons.calendar_month_rounded,
-                                    size: 16,
+                                    Icons.cloud_upload_rounded,
+                                    size: 18,
                                     color: Color(0xFF0D47A1),
                                   ),
                                   padding: EdgeInsets.zero,
@@ -1636,18 +1553,16 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                                           ),
                                         );
                                     if (picked != null) {
-                                      setState(() {
-                                        equipo.ultimoRespaldo = picked;
-                                      });
-                                      // Notifica a la estructura principal para redibujar y guardar en SharedPreferences
-                                      widget.onInventarioChanged();
+                                      _actualizarFechaRespaldoEnNube(
+                                        equipo,
+                                        picked,
+                                      );
                                     }
                                   },
                                 ),
                               ],
                             ),
                           ),
-                          // Celda de días calculados automáticamente con color de alerta condicional
                           DataCell(
                             Container(
                               width: 50,
