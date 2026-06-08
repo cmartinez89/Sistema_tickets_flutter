@@ -3,9 +3,14 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 // ============================================================================
-// CONFIGURACIÓN DE RED (Reemplaza con la IP pública de tu instancia EC2)
+// CONFIGURACIÓN DE RED
+// Mueve esta URL a un archivo de config o variable de entorno en producción.
 // ============================================================================
-const String API_URL = 'http://54.161.41.131:8000';
+const String kApiUrl = 'http://54.161.41.131:8000';
+const Duration kTimeout = Duration(seconds: 15);
+
+// Lista única de técnicos para no repetirla en múltiples lugares
+const List<String> kTecnicos = ['Sin Asignar', 'Carlos', 'Benjamin', 'Julio'];
 
 void main() {
   runApp(const SoporteBetaApp());
@@ -21,7 +26,7 @@ class SoporteBetaApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00695C), // Verde oscuro
+          seedColor: const Color(0xFF00695C),
           primary: const Color(0xFF00695C),
         ),
         useMaterial3: true,
@@ -65,6 +70,17 @@ class Ticket {
     asignadoA: map['asignadoA'],
     fecha: DateTime.parse(map['fecha']),
   );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'usuario': usuario,
+    'departamento': departamento,
+    'descripcion': descripcion,
+    'prioridad': prioridad,
+    'estado': estado,
+    'asignadoA': asignadoA,
+    'fecha': fecha.toIso8601String(),
+  };
 }
 
 class Equipo {
@@ -114,11 +130,10 @@ class Equipo {
   }
 
   double get valorActual {
-    int anosPasados = DateTime.now().year - anoAdquisicion;
+    final int anosPasados = DateTime.now().year - anoAdquisicion;
     if (anosPasados <= 0) return valorAdquisicion;
     if (anosPasados >= 5) return valorAdquisicion * 0.20;
-    double factorDepreciacion = 1.0 - (anosPasados * 0.20);
-    return valorAdquisicion * factorDepreciacion;
+    return valorAdquisicion * (1.0 - anosPasados * 0.20);
   }
 
   factory Equipo.fromMap(Map<String, dynamic> map) => Equipo(
@@ -149,18 +164,167 @@ class Session {
   final String username;
   final String nombreCompleto;
   final String rol;
+  final String token;
+
   Session({
     required this.username,
     required this.nombreCompleto,
     required this.rol,
+    required this.token,
   });
 }
 
 // ============================================================================
-// PANTALLA: LOGIN (CONECTADA A AWS)
+// SERVICIO DE API (Capa separada de la UI)
+// ============================================================================
+class ApiService {
+  final String token;
+  ApiService({required this.token});
+
+  Map<String, String> get _headers => {
+    'Content-Type': 'application/json',
+    if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+  };
+
+  Future<List<Ticket>> fetchTickets() async {
+    final res = await http
+        .get(Uri.parse('$kApiUrl/tickets'), headers: _headers)
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar tickets');
+    final List<dynamic> data = jsonDecode(res.body);
+    return data.map((e) => Ticket.fromMap(e)).toList();
+  }
+
+  Future<List<Equipo>> fetchEquipos() async {
+    final res = await http
+        .get(Uri.parse('$kApiUrl/equipos'), headers: _headers)
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar equipos');
+    final List<dynamic> data = jsonDecode(res.body);
+    return data.map((e) => Equipo.fromMap(e)).toList();
+  }
+
+  Future<Ticket> crearTicket(Ticket ticket) async {
+    final res = await http
+        .post(
+          Uri.parse('$kApiUrl/tickets'),
+          headers: _headers,
+          body: jsonEncode(ticket.toMap()),
+        )
+        .timeout(kTimeout);
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('Error al crear ticket');
+    }
+    return Ticket.fromMap(jsonDecode(res.body));
+  }
+
+  Future<void> cambiarEstatusTicket(String ticketId, String nuevoEstado) async {
+    final res = await http
+        .put(
+          Uri.parse('$kApiUrl/tickets/$ticketId/status'),
+          headers: _headers,
+          body: jsonEncode({'estado': nuevoEstado}),
+        )
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al actualizar estatus');
+  }
+
+  Future<void> reasignarTicket(String ticketId, String tecnico) async {
+    final res = await http
+        .put(
+          Uri.parse('$kApiUrl/tickets/$ticketId/assign'),
+          headers: _headers,
+          body: jsonEncode({'asignadoA': tecnico}),
+        )
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al reasignar ticket');
+  }
+
+  Future<void> asignarEquipo(
+    String equipoId, {
+    required String empleado,
+    required String rol,
+    required String folio,
+  }) async {
+    final res = await http
+        .put(
+          Uri.parse('$kApiUrl/equipos/$equipoId/assign'),
+          headers: _headers,
+          body: jsonEncode({
+            'empleadoAsignado': empleado,
+            'rolEmpleado': rol,
+            'folioResponsiva': folio,
+            'estatus': 'Asignado',
+          }),
+        )
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al asignar equipo');
+  }
+
+  Future<void> liberarEquipo(String equipoId) async {
+    final res = await http
+        .put(
+          Uri.parse('$kApiUrl/equipos/$equipoId/release'),
+          headers: _headers,
+          body: jsonEncode({
+            'empleadoAsignado': null,
+            'rolEmpleado': null,
+            'folioResponsiva': '---',
+            'estatus': 'Disponible',
+          }),
+        )
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al liberar equipo');
+  }
+
+  Future<void> actualizarRespaldo(String equipoId, DateTime fecha) async {
+    final res = await http
+        .put(
+          Uri.parse('$kApiUrl/equipos/$equipoId/backup'),
+          headers: _headers,
+          body: jsonEncode({'ultimoRespaldo': fecha.toIso8601String()}),
+        )
+        .timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al actualizar respaldo');
+  }
+}
+
+// ============================================================================
+// HELPERS GLOBALES
+// ============================================================================
+Color statusColor(String estado) {
+  switch (estado) {
+    case 'Pendiente':
+      return Colors.red.shade700;
+    case 'En Proceso':
+      return Colors.orange.shade800;
+    case 'Resuelto':
+      return Colors.green.shade700;
+    default:
+      return Colors.grey;
+  }
+}
+
+void mostrarSnackBar(
+  BuildContext context,
+  String mensaje, {
+  bool error = false,
+}) {
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(mensaje),
+      backgroundColor: error ? Colors.redAccent : null,
+    ),
+  );
+}
+
+// ============================================================================
+// PANTALLA: LOGIN
 // ============================================================================
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -171,50 +335,61 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
-  Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      String user = _usernameController.text.trim().toLowerCase();
-      String pass = _passwordController.text;
-
-      try {
-        final response = await http.post(
-          Uri.parse('$API_URL/login'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'username': user, 'password': pass}),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          Session sesionActual = Session(
-            username: data['username'],
-            nombreCompleto: data['nombreCompleto'],
-            rol: data['rol'],
-          );
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (context) => MainLayout(session: sesionActual),
-              ),
-            );
-          }
-        } else {
-          _mostrarError('Credenciales incorrectas o usuario no encontrado');
-        }
-      } catch (e) {
-        _mostrarError('Error de conexión con el servidor AWS: $e');
-      } finally {
-        setState(() => _isLoading = false);
-      }
-    }
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  void _mostrarError(String mensaje) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(mensaje), backgroundColor: Colors.redAccent),
-      );
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$kApiUrl/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'username': _usernameController.text.trim().toLowerCase(),
+              'password': _passwordController.text,
+            }),
+          )
+          .timeout(kTimeout);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final session = Session(
+          username: data['username'],
+          nombreCompleto: data['nombreCompleto'],
+          rol: data['rol'],
+          // Si tu backend aún no devuelve token, usa string vacío por ahora
+          token: data['token'] ?? '',
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => MainLayout(session: session)),
+        );
+      } else {
+        mostrarSnackBar(
+          context,
+          'Credenciales incorrectas o usuario no encontrado',
+          error: true,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        mostrarSnackBar(
+          context,
+          'Error de conexión con el servidor: $e',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -245,7 +420,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
                       const Text(
-                        'Soporte Beta v1.1',
+                        'Soporte Beta v1.2',
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -266,6 +441,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           labelText: 'Usuario',
                           border: OutlineInputBorder(),
                         ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Requerido'
+                            : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -276,6 +454,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           border: OutlineInputBorder(),
                         ),
                         onFieldSubmitted: (_) => _handleLogin(),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Requerido'
+                            : null,
                       ),
                       const SizedBox(height: 24),
                       SizedBox(
@@ -309,85 +490,74 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 // ============================================================================
-// ESTRUCTURA BASE Y CONTROL DE DATOS (NUBE)
+// ESTRUCTURA BASE Y CONTROL DE DATOS
 // ============================================================================
 class MainLayout extends StatefulWidget {
   final Session session;
   const MainLayout({super.key, required this.session});
+
   @override
   State<MainLayout> createState() => _MainLayoutState();
 }
 
 class _MainLayoutState extends State<MainLayout> {
   int _screenIndex = 1;
-  List<Ticket> _ticketsGlobales = [];
-  List<Equipo> _inventarioGlobal = [];
+  List<Ticket> _tickets = [];
+  List<Equipo> _inventario = [];
   bool _cargando = true;
+  late final ApiService _api;
 
   @override
   void initState() {
     super.initState();
-    _cargarDatosDeAPI();
+    _api = ApiService(token: widget.session.token);
+    _cargarDatos();
   }
 
-  Future<void> _cargarDatosDeAPI() async {
+  Future<void> _cargarDatos() async {
+    setState(() => _cargando = true);
     try {
-      final ticketsRes = await http.get(Uri.parse('$API_URL/tickets'));
-      final equiposRes = await http.get(Uri.parse('$API_URL/equipos'));
-
-      if (ticketsRes.statusCode == 200 && equiposRes.statusCode == 200) {
-        final List<dynamic> ticketsJson = jsonDecode(ticketsRes.body);
-        final List<dynamic> equiposJson = jsonDecode(equiposRes.body);
-
-        setState(() {
-          _ticketsGlobales = ticketsJson
-              .map((item) => Ticket.fromMap(item))
-              .toList();
-          _inventarioGlobal = equiposJson
-              .map((item) => Equipo.fromMap(item))
-              .toList();
-          _cargando = false;
-        });
-      }
+      final results = await Future.wait([
+        _api.fetchTickets(),
+        _api.fetchEquipos(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _tickets = results[0] as List<Ticket>;
+        _inventario = results[1] as List<Equipo>;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cargar datos: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      setState(() => _cargando = false);
+      if (mounted)
+        mostrarSnackBar(context, 'Error al cargar datos: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _cargando = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_cargando)
+    if (_cargando) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-    final List<Widget> screens = [
-      DashboardScreen(tickets: _ticketsGlobales, session: widget.session),
+    final screens = [
+      DashboardScreen(tickets: _tickets, session: widget.session),
       TicketsScreen(
-        tickets: _ticketsGlobales,
+        tickets: _tickets,
         session: widget.session,
-        onTicketsChanged: () {
-          setState(() {});
-        },
+        api: _api,
+        onRefresh: _cargarDatos,
       ),
       EquipmentScreen(
-        inventario: _inventarioGlobal,
+        inventario: _inventario,
         session: widget.session,
-        onInventarioChanged: () {
-          setState(() {});
-        },
+        api: _api,
+        onRefresh: _cargarDatos,
       ),
       PantallaRespaldos(
-        inventario: _inventarioGlobal,
-        onInventarioChanged: () {
-          setState(() {});
-        },
+        inventario: _inventario,
+        api: _api,
+        onRefresh: _cargarDatos,
       ),
     ];
 
@@ -395,7 +565,7 @@ class _MainLayoutState extends State<MainLayout> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
         title: Text(
-          'Soporte Beta — Módulo de ${widget.session.rol}',
+          'Soporte Beta — ${widget.session.rol}',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -406,17 +576,16 @@ class _MainLayoutState extends State<MainLayout> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() => _cargando = true);
-              _cargarDatosDeAPI();
-            },
+            onPressed: _cargarDatos,
+            tooltip: 'Recargar datos',
           ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             onPressed: () => Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
             ),
+            tooltip: 'Cerrar sesión',
           ),
         ],
       ),
@@ -453,46 +622,30 @@ class _MainLayoutState extends State<MainLayout> {
                 ],
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.dashboard_rounded),
-              title: const Text('Dashboard'),
-              selected: _screenIndex == 0,
-              onTap: () {
-                setState(() => _screenIndex = 0);
-                Navigator.pop(context);
-              },
+            _drawerItem(Icons.dashboard_rounded, 'Dashboard', 0),
+            _drawerItem(
+              Icons.confirmation_number_rounded,
+              'Tickets / Asignaciones',
+              1,
             ),
-            ListTile(
-              leading: const Icon(Icons.confirmation_number_rounded),
-              title: const Text('Tickets / Asignaciones'),
-              selected: _screenIndex == 1,
-              onTap: () {
-                setState(() => _screenIndex = 1);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.computer_rounded),
-              title: const Text('Equipos / Responsivas'),
-              selected: _screenIndex == 2,
-              onTap: () {
-                setState(() => _screenIndex = 2);
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.backup_rounded),
-              title: const Text('Control de Respaldos'),
-              selected: _screenIndex == 3,
-              onTap: () {
-                setState(() => _screenIndex = 3);
-                Navigator.pop(context);
-              },
-            ),
+            _drawerItem(Icons.computer_rounded, 'Equipos / Responsivas', 2),
+            _drawerItem(Icons.backup_rounded, 'Control de Respaldos', 3),
           ],
         ),
       ),
       body: screens[_screenIndex],
+    );
+  }
+
+  ListTile _drawerItem(IconData icon, String label, int index) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(label),
+      selected: _screenIndex == index,
+      onTap: () {
+        setState(() => _screenIndex = index);
+        Navigator.pop(context);
+      },
     );
   }
 }
@@ -503,6 +656,7 @@ class _MainLayoutState extends State<MainLayout> {
 class DashboardScreen extends StatelessWidget {
   final List<Ticket> tickets;
   final Session session;
+
   const DashboardScreen({
     super.key,
     required this.tickets,
@@ -511,12 +665,21 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    List<Ticket> visibles = session.rol == 'Admin'
+    final visibles = session.rol == 'Admin'
         ? tickets
         : tickets
-              .where((t) => t.asignadoA.toLowerCase() == session.username)
+              .where(
+                (t) =>
+                    t.asignadoA.toLowerCase() == session.username.toLowerCase(),
+              )
               .toList();
-    int activos = visibles.where((t) => t.estado != 'Resuelto').length;
+
+    final activos = visibles.where((t) => t.estado != 'Resuelto').length;
+    final resueltos = visibles.where((t) => t.estado == 'Resuelto').length;
+    final alta = visibles
+        .where((t) => t.prioridad == 'Alta' && t.estado != 'Resuelto')
+        .length;
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -529,40 +692,68 @@ class DashboardScreen extends StatelessWidget {
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 20),
-          Card(
-            color: Colors.orange.shade50,
-            child: ListTile(
-              leading: const Icon(
-                Icons.assignment_late_rounded,
-                color: Colors.orange,
-                size: 40,
-              ),
-              title: const Text(
-                'Tickets Activos en Cola',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Text('Hay $activos solicitudes esperando atención.'),
-            ),
+          _dashCard(
+            icon: Icons.assignment_late_rounded,
+            color: Colors.orange,
+            titulo: 'Tickets Activos en Cola',
+            subtitulo: '$activos solicitudes esperando atención.',
+          ),
+          const SizedBox(height: 12),
+          _dashCard(
+            icon: Icons.check_circle_rounded,
+            color: Colors.green,
+            titulo: 'Tickets Resueltos',
+            subtitulo: '$resueltos tickets completados.',
+          ),
+          const SizedBox(height: 12),
+          _dashCard(
+            icon: Icons.priority_high_rounded,
+            color: Colors.red,
+            titulo: 'Prioridad Alta Pendientes',
+            subtitulo: '$alta tickets críticos sin resolver.',
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _dashCard({
+    required IconData icon,
+    required Color color,
+    required String titulo,
+    required String subtitulo,
+  }) {
+    return Card(
+      color: color.withOpacity(0.08),
+      child: ListTile(
+        leading: Icon(icon, color: color, size: 40),
+        title: Text(
+          titulo,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(subtitulo),
       ),
     );
   }
 }
 
 // ============================================================================
-// PANTALLA: GESTIÓN DE TICKETS (Conecta PUT a AWS y usa Filtros)
+// PANTALLA: GESTIÓN DE TICKETS
 // ============================================================================
 class TicketsScreen extends StatefulWidget {
   final List<Ticket> tickets;
   final Session session;
-  final VoidCallback onTicketsChanged;
+  final ApiService api;
+  final VoidCallback onRefresh;
+
   const TicketsScreen({
     super.key,
     required this.tickets,
     required this.session,
-    required this.onTicketsChanged,
+    required this.api,
+    required this.onRefresh,
   });
+
   @override
   State<TicketsScreen> createState() => _TicketsScreenState();
 }
@@ -574,9 +765,16 @@ class _TicketsScreenState extends State<TicketsScreen> {
   final _descController = TextEditingController();
   String _prioridadSeleccionada = 'Media';
   String _asignadoPorDefecto = 'Sin Asignar';
-
-  // Variable de control para el filtro
   String _filtroActual = 'Activos';
+  bool _guardando = false;
+
+  @override
+  void dispose() {
+    _usuarioController.dispose();
+    _deptoController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
 
   void _openNewTicketDialog() {
     _usuarioController.clear();
@@ -588,7 +786,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+        builder: (ctx, setDialogState) => AlertDialog(
           title: const Text(
             'Levantar Reporte Técnico',
             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
@@ -623,7 +821,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      initialValue: _prioridadSeleccionada,
+                      value: _prioridadSeleccionada,
                       decoration: const InputDecoration(
                         labelText: 'Prioridad',
                         border: OutlineInputBorder(),
@@ -639,12 +837,12 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     const SizedBox(height: 12),
                     if (widget.session.rol == 'Admin')
                       DropdownButtonFormField<String>(
-                        initialValue: _asignadoPorDefecto,
+                        value: _asignadoPorDefecto,
                         decoration: const InputDecoration(
                           labelText: 'Técnico Responsable',
                           border: OutlineInputBorder(),
                         ),
-                        items: ['Sin Asignar', 'Carlos', 'Benjamin', 'Julio']
+                        items: kTecnicos
                             .map(
                               (p) => DropdownMenuItem(value: p, child: Text(p)),
                             )
@@ -671,43 +869,61 @@ class _TicketsScreenState extends State<TicketsScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancelar'),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
+            StatefulBuilder(
+              builder: (ctx2, setBtn) => ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _guardando
+                    ? null
+                    : () async {
+                        if (!_formKey.currentState!.validate()) return;
+                        setBtn(() => _guardando = true);
+
+                        final nuevo = Ticket(
+                          id: '',
+                          usuario: _usuarioController.text.trim(),
+                          departamento: _deptoController.text.trim(),
+                          descripcion: _descController.text.trim(),
+                          prioridad: _prioridadSeleccionada,
+                          estado: 'Pendiente',
+                          asignadoA: widget.session.rol == 'Admin'
+                              ? _asignadoPorDefecto
+                              : 'Sin Asignar',
+                          fecha: DateTime.now(),
+                        );
+
+                        try {
+                          await widget.api.crearTicket(nuevo);
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          widget.onRefresh();
+                        } catch (e) {
+                          if (ctx.mounted) {
+                            mostrarSnackBar(
+                              ctx,
+                              'Error al crear ticket: $e',
+                              error: true,
+                            );
+                          }
+                        } finally {
+                          setBtn(() => _guardando = false);
+                        }
+                      },
+                child: _guardando
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text('Registrar'),
               ),
-              onPressed: () {
-                if (_formKey.currentState!.validate()) {
-                  final nuevo = Ticket(
-                    id: 'TK-${100 + widget.tickets.length + 1}',
-                    usuario: _usuarioController.text,
-                    departamento: _deptoController.text,
-                    descripcion: _descController.text,
-                    prioridad: _prioridadSeleccionada,
-                    estado: 'Pendiente',
-                    asignadoA: widget.session.rol == 'Admin'
-                        ? _asignadoPorDefecto
-                        : 'Sin Asignar',
-                    fecha: DateTime.now(),
-                  );
-                  setState(() {
-                    widget.tickets.insert(0, nuevo);
-                  });
-                  widget.onTicketsChanged();
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Ticket registrado localmente (Falta endpoint POST)',
-                      ),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Registrar'),
             ),
           ],
         ),
@@ -715,62 +931,28 @@ class _TicketsScreenState extends State<TicketsScreen> {
     );
   }
 
-  Future<void> _cambiarEstatusEnNube(Ticket ticket, String nuevoEstado) async {
+  Future<void> _cambiarEstatus(Ticket ticket, String nuevoEstado) async {
     try {
-      final response = await http.put(
-        Uri.parse('$API_URL/tickets/${ticket.id}/status'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'estado': nuevoEstado}),
-      );
-      if (response.statusCode == 200) {
-        setState(() {
-          ticket.estado = nuevoEstado;
-        });
-        widget.onTicketsChanged();
-      }
+      await widget.api.cambiarEstatusTicket(ticket.id, nuevoEstado);
+      setState(() => ticket.estado = nuevoEstado);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error al actualizar en AWS: $e')));
+      if (mounted)
+        mostrarSnackBar(context, 'Error al actualizar: $e', error: true);
     }
   }
 
-  Future<void> _reasignarEnNube(Ticket ticket, String nuevoTecnico) async {
+  Future<void> _reasignar(Ticket ticket, String tecnico) async {
     try {
-      final response = await http.put(
-        Uri.parse('$API_URL/tickets/${ticket.id}/assign'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'asignadoA': nuevoTecnico}),
-      );
-      if (response.statusCode == 200) {
-        setState(() {
-          ticket.asignadoA = nuevoTecnico;
-        });
-        widget.onTicketsChanged();
-      }
+      await widget.api.reasignarTicket(ticket.id, tecnico);
+      setState(() => ticket.asignadoA = tecnico);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error al reasignar en AWS: $e')));
-    }
-  }
-
-  Color _getStatusColor(String estado) {
-    switch (estado) {
-      case 'Pendiente':
-        return Colors.red.shade700;
-      case 'En Proceso':
-        return Colors.orange.shade800;
-      case 'Resuelto':
-        return Colors.green.shade700;
-      default:
-        return Colors.grey;
+      if (mounted)
+        mostrarSnackBar(context, 'Error al reasignar: $e', error: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 1. Filtrar por permisos (Admin ve todos, Técnico ve los suyos)
     List<Ticket> filtrados = widget.session.rol == 'Admin'
         ? widget.tickets
         : widget.tickets
@@ -782,7 +964,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
               )
               .toList();
 
-    // 2. Aplicar el filtro de estatus seleccionado
     if (_filtroActual == 'Activos') {
       filtrados = filtrados.where((t) => t.estado != 'Resuelto').toList();
     } else if (_filtroActual == 'Resueltos') {
@@ -814,28 +995,25 @@ class _TicketsScreenState extends State<TicketsScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            // Fila de botones para seleccionar el filtro
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: ['Activos', 'Resueltos', 'Todos']
                     .map(
-                      (filtro) => Padding(
+                      (f) => Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: ChoiceChip(
                           label: Text(
-                            filtro,
+                            f,
                             style: TextStyle(
-                              fontWeight: _filtroActual == filtro
+                              fontWeight: _filtroActual == f
                                   ? FontWeight.bold
                                   : FontWeight.normal,
                             ),
                           ),
-                          selected: _filtroActual == filtro,
-                          onSelected: (bool selected) {
-                            if (selected) {
-                              setState(() => _filtroActual = filtro);
-                            }
+                          selected: _filtroActual == f,
+                          onSelected: (sel) {
+                            if (sel) setState(() => _filtroActual = f);
                           },
                           selectedColor: Theme.of(
                             context,
@@ -848,168 +1026,166 @@ class _TicketsScreenState extends State<TicketsScreen> {
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
-                itemCount: filtrados.length,
-                itemBuilder: (context, index) {
-                  final ticket = filtrados[index];
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ExpansionTile(
-                      leading: Icon(
-                        Icons.circle,
-                        size: 12,
-                        color: ticket.prioridad == 'Alta'
-                            ? Colors.red
-                            : (ticket.prioridad == 'Media'
+              child: filtrados.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No hay tickets en esta categoría.',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: filtrados.length,
+                      itemBuilder: (context, index) {
+                        final ticket = filtrados[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          child: ExpansionTile(
+                            leading: Icon(
+                              Icons.circle,
+                              size: 12,
+                              color: ticket.prioridad == 'Alta'
+                                  ? Colors.red
+                                  : ticket.prioridad == 'Media'
                                   ? Colors.orange
-                                  : Colors.blue),
-                      ),
-                      title: Text(
-                        ticket.descripcion,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'ID: ${ticket.id} • ${ticket.usuario}\nAsignado a: ${ticket.asignadoA}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(ticket.estado).withAlpha(30),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          ticket.estado,
-                          style: TextStyle(
-                            color: _getStatusColor(ticket.estado),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(14.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                                  : Colors.blue,
+                            ),
+                            title: Text(
+                              ticket.descripcion,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'ID: ${ticket.id} • ${ticket.usuario}\nAsignado a: ${ticket.asignadoA}',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor(
+                                  ticket.estado,
+                                ).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                ticket.estado,
+                                style: TextStyle(
+                                  color: statusColor(ticket.estado),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
                             children: [
-                              const Text(
-                                'Descripción completa:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                  color: Colors.blueGrey,
-                                ),
-                              ),
-                              Text(
-                                ticket.descripcion,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                              const Divider(),
-                              const Text(
-                                'Cambiar Estatus:',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Row(
-                                children:
-                                    ['Pendiente', 'En Proceso', 'Resuelto']
-                                        .map(
-                                          (e) => Padding(
-                                            padding: const EdgeInsets.only(
-                                              right: 6.0,
-                                            ),
-                                            child: ChoiceChip(
-                                              label: Text(
-                                                e,
-                                                style: const TextStyle(
-                                                  fontSize: 11,
-                                                ),
-                                              ),
-                                              selected: ticket.estado == e,
-                                              onSelected: (_) =>
-                                                  _cambiarEstatusEnNube(
-                                                    ticket,
-                                                    e,
-                                                  ),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
-                              ),
-                              if (widget.session.rol == 'Admin') ...[
-                                const Divider(),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                              Padding(
+                                padding: const EdgeInsets.all(14.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      'Reasignar Responsable:',
+                                      'Descripción completa:',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: Colors.blueGrey,
+                                      ),
+                                    ),
+                                    Text(
+                                      ticket.descripcion,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                    const Divider(),
+                                    const Text(
+                                      'Cambiar Estatus:',
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.indigo,
                                       ),
                                     ),
-                                    DropdownButton<String>(
-                                      value:
+                                    Wrap(
+                                      spacing: 6,
+                                      children:
                                           [
-                                            'Carlos',
-                                            'Benjamin',
-                                            'Julio',
-                                          ].contains(ticket.asignadoA)
-                                          ? ticket.asignadoA
-                                          : 'Sin Asignar',
-                                      underline: Container(),
-                                      style: const TextStyle(
-                                        color: Colors.black87,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                      items:
-                                          [
-                                                'Sin Asignar',
-                                                'Carlos',
-                                                'Benjamin',
-                                                'Julio',
+                                                'Pendiente',
+                                                'En Proceso',
+                                                'Resuelto',
                                               ]
                                               .map(
-                                                (e) => DropdownMenuItem(
-                                                  value: e,
-                                                  child: Text(e),
+                                                (e) => ChoiceChip(
+                                                  label: Text(
+                                                    e,
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                  selected: ticket.estado == e,
+                                                  onSelected: (_) =>
+                                                      _cambiarEstatus(
+                                                        ticket,
+                                                        e,
+                                                      ),
                                                 ),
                                               )
                                               .toList(),
-                                      onChanged: (nuevoTecnico) {
-                                        if (nuevoTecnico != null) {
-                                          _reasignarEnNube(
-                                            ticket,
-                                            nuevoTecnico,
-                                          );
-                                        }
-                                      },
                                     ),
+                                    if (widget.session.rol == 'Admin') ...[
+                                      const Divider(),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text(
+                                            'Reasignar Responsable:',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.indigo,
+                                            ),
+                                          ),
+                                          DropdownButton<String>(
+                                            value:
+                                                kTecnicos.contains(
+                                                  ticket.asignadoA,
+                                                )
+                                                ? ticket.asignadoA
+                                                : 'Sin Asignar',
+                                            underline: Container(),
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                            ),
+                                            items: kTecnicos
+                                                .map(
+                                                  (e) => DropdownMenuItem(
+                                                    value: e,
+                                                    child: Text(e),
+                                                  ),
+                                                )
+                                                .toList(),
+                                            onChanged: (tecnico) {
+                                              if (tecnico != null) {
+                                                _reasignar(ticket, tecnico);
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
                                 ),
-                              ],
+                              ),
                             ],
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -1024,13 +1200,17 @@ class _TicketsScreenState extends State<TicketsScreen> {
 class EquipmentScreen extends StatefulWidget {
   final List<Equipo> inventario;
   final Session session;
-  final VoidCallback onInventarioChanged;
+  final ApiService api;
+  final VoidCallback onRefresh;
+
   const EquipmentScreen({
     super.key,
     required this.inventario,
     required this.session,
-    required this.onInventarioChanged,
+    required this.api,
+    required this.onRefresh,
   });
+
   @override
   State<EquipmentScreen> createState() => _EquipmentScreenState();
 }
@@ -1041,10 +1221,18 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   final _puestoController = TextEditingController();
   final _folioController = TextEditingController();
 
+  @override
+  void dispose() {
+    _empleadoController.dispose();
+    _puestoController.dispose();
+    _folioController.dispose();
+    super.dispose();
+  }
+
   void _liberarHardware(Equipo equipo) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Row(
           children: [
             const Icon(Icons.warning_amber_rounded, color: Colors.red),
@@ -1053,11 +1241,11 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
           ],
         ),
         content: Text(
-          '¿Confirmas la baja del empleado? El equipo marcará como "Disponible" y se desvinculará de "${equipo.empleadoAsignado}".',
+          '¿Confirmas la baja del empleado? El equipo quedará como "Disponible" y se desvinculará de "${equipo.empleadoAsignado}".',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
@@ -1065,18 +1253,22 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
-              setState(() {
-                equipo.estatus = 'Disponible';
-                equipo.empleadoAsignado = null;
-                equipo.rolEmpleado = null;
-                equipo.folioResponsiva = '---';
-              });
-              widget.onInventarioChanged();
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Hardware liberado localmente.')),
-              );
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await widget.api.liberarEquipo(equipo.id);
+                setState(() {
+                  equipo.estatus = 'Disponible';
+                  equipo.empleadoAsignado = null;
+                  equipo.rolEmpleado = null;
+                  equipo.folioResponsiva = '---';
+                });
+                if (mounted)
+                  mostrarSnackBar(context, 'Hardware liberado correctamente.');
+              } catch (e) {
+                if (mounted)
+                  mostrarSnackBar(context, 'Error al liberar: $e', error: true);
+              }
             },
             child: const Text('Confirmar Baja'),
           ),
@@ -1092,7 +1284,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
             Icon(Icons.person_add_alt_1_rounded, color: Colors.teal),
@@ -1128,7 +1320,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       prefixIcon: Icon(Icons.person),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Ingrese el nombre del colaborador'
+                        ? 'Ingrese el nombre'
                         : null,
                   ),
                   const SizedBox(height: 12),
@@ -1153,7 +1345,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       prefixIcon: Icon(Icons.description),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Ingrese el número de folio'
+                        ? 'Ingrese el folio'
                         : null,
                   ),
                 ],
@@ -1163,7 +1355,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
@@ -1171,22 +1363,28 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               backgroundColor: Colors.teal,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
-              if (_assignFormKey.currentState!.validate()) {
+            onPressed: () async {
+              if (!_assignFormKey.currentState!.validate()) return;
+              Navigator.pop(ctx);
+              try {
+                await widget.api.asignarEquipo(
+                  equipo.id,
+                  empleado: _empleadoController.text.trim(),
+                  rol: _puestoController.text.trim(),
+                  folio: _folioController.text.trim(),
+                );
                 setState(() {
                   equipo.estatus = 'Asignado';
                   equipo.empleadoAsignado = _empleadoController.text.trim();
                   equipo.rolEmpleado = _puestoController.text.trim();
                   equipo.folioResponsiva = _folioController.text.trim();
                 });
-                widget.onInventarioChanged();
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Activo asignado localmente.'),
-                    backgroundColor: Colors.teal,
-                  ),
-                );
+                if (mounted) {
+                  mostrarSnackBar(context, 'Activo asignado correctamente.');
+                }
+              } catch (e) {
+                if (mounted)
+                  mostrarSnackBar(context, 'Error al asignar: $e', error: true);
               }
             },
             child: const Text('Guardar Asignación'),
@@ -1223,7 +1421,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 itemCount: widget.inventario.length,
                 itemBuilder: (context, index) {
                   final equipo = widget.inventario[index];
-                  final bool esAsignado = equipo.estatus == 'Asignado';
+                  final esAsignado = equipo.estatus == 'Asignado';
+
                   return Card(
                     elevation: 2,
                     margin: const EdgeInsets.symmetric(vertical: 6),
@@ -1231,9 +1430,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       leading: Icon(
                         equipo.tipo == 'Laptop'
                             ? Icons.laptop_mac_rounded
-                            : (equipo.tipo == 'Servidor'
-                                  ? Icons.dns_rounded
-                                  : Icons.computer_rounded),
+                            : equipo.tipo == 'Servidor'
+                            ? Icons.dns_rounded
+                            : Icons.computer_rounded,
                         color: esAsignado
                             ? Colors.indigo.shade700
                             : Colors.teal.shade700,
@@ -1294,7 +1493,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                   'Rol/Puesto: ${equipo.rolEmpleado}',
                                   style: const TextStyle(fontSize: 13),
                                 ),
-                              ] else ...[
+                              ] else
                                 Text(
                                   'Disponible en almacén. (Resguardo: ${equipo.empleadoAsignado ?? "Sistemas"})',
                                   style: const TextStyle(
@@ -1303,7 +1502,6 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                     fontSize: 13,
                                   ),
                                 ),
-                              ],
                               const Divider(),
                               Text(
                                 'Ficha Técnica e Historial:',
@@ -1402,16 +1600,18 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 }
 
 // ============================================================================
-// PANTALLA: CONTROL DE RESPALDOS INTERACTIVO (CONECTADO A AWS)
+// PANTALLA: CONTROL DE RESPALDOS
 // ============================================================================
 class PantallaRespaldos extends StatefulWidget {
   final List<Equipo> inventario;
-  final VoidCallback onInventarioChanged;
+  final ApiService api;
+  final VoidCallback onRefresh;
 
   const PantallaRespaldos({
     super.key,
     required this.inventario,
-    required this.onInventarioChanged,
+    required this.api,
+    required this.onRefresh,
   });
 
   @override
@@ -1419,37 +1619,25 @@ class PantallaRespaldos extends StatefulWidget {
 }
 
 class _PantallaRespaldosState extends State<PantallaRespaldos> {
-  Future<void> _actualizarFechaRespaldoEnNube(
-    Equipo equipo,
-    DateTime nuevaFecha,
-  ) async {
+  Future<void> _actualizarRespaldo(Equipo equipo, DateTime fecha) async {
     try {
-      final response = await http.put(
-        Uri.parse('$API_URL/equipos/${equipo.id}/backup'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'ultimoRespaldo': nuevaFecha.toIso8601String()}),
-      );
-      if (response.statusCode == 200) {
-        setState(() {
-          equipo.ultimoRespaldo = nuevaFecha;
-        });
-        widget.onInventarioChanged();
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Fecha de respaldo sincronizada con AWS'),
-            ),
-          );
+      await widget.api.actualizarRespaldo(equipo.id, fecha);
+      setState(() => equipo.ultimoRespaldo = fecha);
+      if (mounted) {
+        mostrarSnackBar(context, 'Respaldo sincronizado con AWS');
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al sincronizar con AWS: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (mounted) {
+        mostrarSnackBar(context, 'Error al sincronizar: $e', error: true);
+      }
     }
+  }
+
+  String _formatFecha(DateTime? fecha) {
+    if (fecha == null) return 'Sin respaldos';
+    return '${fecha.day.toString().padLeft(2, '0')}/'
+        '${fecha.month.toString().padLeft(2, '0')}/'
+        '${fecha.year}';
   }
 
   @override
@@ -1468,7 +1656,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
             ),
           ),
           const Text(
-            'Presiona el icono de calendario en la fecha para actualizar el último respaldo en la nube.',
+            'Presiona el ícono de nube en cada equipo para actualizar su último respaldo.',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
           const SizedBox(height: 12),
@@ -1535,26 +1723,11 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                     ],
                     rows: widget.inventario.map((equipo) {
                       final dias = equipo.diasUltimoRespaldo;
-
                       Color cellColor = Colors.transparent;
                       if (dias != null) {
-                        if (dias >= 15) {
-                          cellColor = Colors.red.shade300;
-                        } else {
-                          cellColor = Colors.amber.shade200;
-                        }
-                      }
-
-                      String fechaFormateada = 'Sin respaldos';
-                      if (equipo.ultimoRespaldo != null) {
-                        final dia = equipo.ultimoRespaldo!.day
-                            .toString()
-                            .padLeft(2, '0');
-                        final mes = equipo.ultimoRespaldo!.month
-                            .toString()
-                            .padLeft(2, '0');
-                        final anio = equipo.ultimoRespaldo!.year;
-                        fechaFormateada = "$dia/$mes/$anio";
+                        cellColor = dias >= 15
+                            ? Colors.red.shade300
+                            : Colors.amber.shade200;
                       }
 
                       return DataRow(
@@ -1571,7 +1744,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  fechaFormateada,
+                                  _formatFecha(equipo.ultimoRespaldo),
                                   style: const TextStyle(fontSize: 13),
                                 ),
                                 const SizedBox(width: 4),
@@ -1583,23 +1756,20 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                                   ),
                                   padding: EdgeInsets.zero,
                                   constraints: const BoxConstraints(),
+                                  tooltip: 'Actualizar fecha de respaldo',
                                   onPressed: () async {
-                                    final DateTime? picked =
-                                        await showDatePicker(
-                                          context: context,
-                                          initialDate:
-                                              equipo.ultimoRespaldo ??
-                                              DateTime.now(),
-                                          firstDate: DateTime(2020),
-                                          lastDate: DateTime.now().add(
-                                            const Duration(days: 365),
-                                          ),
-                                        );
+                                    final picked = await showDatePicker(
+                                      context: context,
+                                      initialDate:
+                                          equipo.ultimoRespaldo ??
+                                          DateTime.now(),
+                                      firstDate: DateTime(2020),
+                                      lastDate: DateTime.now().add(
+                                        const Duration(days: 365),
+                                      ),
+                                    );
                                     if (picked != null) {
-                                      _actualizarFechaRespaldoEnNube(
-                                        equipo,
-                                        picked,
-                                      );
+                                      _actualizarRespaldo(equipo, picked);
                                     }
                                   },
                                 ),
