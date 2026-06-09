@@ -12,3 +12,8 @@ ios/.symlinks/
 
 # VS Code
 .vscode/
+
+# Llaves y archivos sensibles
+*.pem
+*.key
+*.env
