@@ -4,14 +4,17 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 .packages
+devtools_options.yaml
 
 # Android/iOS
 android/.gradle/
 ios/Pods/
 ios/.symlinks/
+*.iml
 
-# VS Code
+# IDEs y Editores (VS Code / Android Studio / IntelliJ)
 .vscode/
+.idea/
 
 # Llaves y archivos sensibles
 *.pem
