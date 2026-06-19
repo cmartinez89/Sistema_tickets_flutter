@@ -3,6 +3,26 @@ import '../models/chat_message_model.dart';
 import '../models/session_model.dart';
 import '../services/api_service.dart';
 
+const _kPaletaColores = [
+  Color(0xFF1976D2),
+  Color(0xFF388E3C),
+  Color(0xFFF57C00),
+  Color(0xFF7B1FA2),
+  Color(0xFFD32F2F),
+  Color(0xFF0097A7),
+  Color(0xFF5D4037),
+  Color(0xFF455A64),
+  Color(0xFFE91E63),
+  Color(0xFF00796B),
+  Color(0xFF6A1B9A),
+  Color(0xFF1565C0),
+];
+
+Color _colorDeUsuario(String username) {
+  final hash = username.codeUnits.fold(0, (a, b) => a + b);
+  return _kPaletaColores[hash % _kPaletaColores.length];
+}
+
 class ChatScreen extends StatefulWidget {
   final List<ChatMessage> mensajes;
   final Session session;
@@ -144,6 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         esMio: esMio,
                         mostrarNombre: mostrarNombre,
                         colorPrimary: primary,
+                        colorUsuario: _colorDeUsuario(msg.deUsuario),
                       );
                     },
                   ),
@@ -213,12 +234,14 @@ class _BurbujaMensaje extends StatelessWidget {
   final bool esMio;
   final bool mostrarNombre;
   final Color colorPrimary;
+  final Color colorUsuario;
 
   const _BurbujaMensaje({
     required this.mensaje,
     required this.esMio,
     required this.mostrarNombre,
     required this.colorPrimary,
+    required this.colorUsuario,
   });
 
   String _hora(DateTime fecha) {
@@ -240,10 +263,10 @@ class _BurbujaMensaje extends StatelessWidget {
           if (!esMio) ...[
             CircleAvatar(
               radius: 15,
-              backgroundColor: colorPrimary.withValues(alpha: 0.15),
+              backgroundColor: colorUsuario.withValues(alpha: 0.18),
               child: Text(
                 mensaje.nombreCompleto.isNotEmpty ? mensaje.nombreCompleto[0].toUpperCase() : '?',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorPrimary),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorUsuario),
               ),
             ),
             const SizedBox(width: 8),
@@ -257,7 +280,7 @@ class _BurbujaMensaje extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 4, bottom: 2),
                     child: Text(
                       mensaje.nombreCompleto,
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colorUsuario),
                     ),
                   ),
                 Container(

@@ -207,23 +207,26 @@ class _TicketsScreenState extends State<TicketsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Consola Soporte (${lista.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                Row(
-                  children: [
-                    SegmentedButton<String>(
-                      segments: const [
-                        ButtonSegment(value: 'Activos', label: Text('Activos')),
-                        ButtonSegment(value: 'Resueltos', label: Text('Resueltos')),
-                        ButtonSegment(value: 'Todos', label: Text('Todos')),
-                      ],
-                      selected: {_filtro},
-                      onSelectionChanged: (s) => setState(() => _filtro = s.first),
-                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(onPressed: _abrirDialogoNuevo, icon: const Icon(Icons.add, size: 16), label: const Text('Nuevo')),
-                  ],
+                ElevatedButton.icon(
+                  onPressed: _abrirDialogoNuevo,
+                  icon: const Icon(Icons.add, size: 16),
+                  label: const Text('Nuevo'),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'Activos', label: Text('Activos'), icon: Icon(Icons.check_circle_outline, size: 14)),
+                  ButtonSegment(value: 'Resueltos', label: Text('Resueltos')),
+                  ButtonSegment(value: 'Todos', label: Text('Todos')),
+                ],
+                selected: {_filtro},
+                onSelectionChanged: (s) => setState(() => _filtro = s.first),
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+              ),
             ),
             const SizedBox(height: 12),
             Expanded(

@@ -192,6 +192,7 @@ class _MainLayoutState extends State<MainLayout> {
   void _logout() {
     _ws.detener();
     widget.notifService.detener();
+    Session.limpiar();
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 

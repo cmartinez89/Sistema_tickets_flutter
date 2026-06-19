@@ -34,10 +34,15 @@ Sistema interno de gestión de soporte técnico, inventario de equipos y control
 ### Chat Interno en tiempo real
 - Mensajería entre técnicos y administrador, accesible desde cualquier pantalla
 - Burbujas estilo Messenger: mensajes propios a la derecha (color primario), ajenos a la izquierda
-- Avatar con inicial, nombre del emisor y hora en cada burbuja
+- **Colores únicos por usuario**: cada participante recibe un color determinista de una paleta de 12 tonos — el avatar, el nombre y la burbuja siempre muestran el mismo color para la misma persona
 - Badge rojo con contador de mensajes no leídos en el menú y en el botón flotante
 - Botón flotante (FAB) de chat visible en toda la aplicación — toca y vuelves a donde estabas
 - Notificación push del navegador cuando llega un mensaje y no estás en el chat
+
+### Sesión persistente
+- La sesión se guarda en `localStorage` del navegador con un TTL de 7 días
+- Al reabrir la aplicación (o minimizar y volver) no es necesario volver a iniciar sesión
+- El cierre de sesión explícito limpia la sesión guardada inmediatamente
 
 ### Notificaciones en tiempo real (WebSocket)
 - Conexión permanente al backend mediante WebSocket
@@ -67,12 +72,13 @@ Flutter Web (PWA)
 
 ```
 lib/
-├── main.dart
+├── main.dart                     ← router de arranque con restauración de sesión
 ├── models/
-│   ├── session_model.dart
+│   ├── session_model.dart        ← incluye guardar/restaurar/limpiar en localStorage
 │   ├── ticket_model.dart
 │   ├── equipo_model.dart
-│   └── chat_message_model.dart
+│   ├── chat_message_model.dart
+│   └── usuario_model.dart
 ├── services/
 │   ├── api_service.dart          ← HTTP REST (kApiUrl, kTimeout)
 │   ├── websocket_service.dart    ← WebSocket con reconexión automática
@@ -81,10 +87,11 @@ lib/
     ├── login_screen.dart
     ├── main_layout.dart          ← estado central, WS, chat, FAB flotante
     ├── dashboard_screen.dart
-    ├── tickets_screen.dart
+    ├── tickets_screen.dart       ← filtros responsivos (fila separada en móvil)
     ├── equipment_screen.dart
     ├── backups_screen.dart
-    ├── chat_screen.dart          ← mensajería en tiempo real
+    ├── chat_screen.dart          ← mensajería con colores únicos por usuario
+    ├── users_screen.dart
     └── dialogo_nuevo_equipo.dart
 
 main_api.py                       ← backend FastAPI (subir a EC2)
