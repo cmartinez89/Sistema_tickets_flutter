@@ -13,6 +13,13 @@ class Ticket {
   String? pruebasRealizadas;
   String? validadoCon;
 
+  String? escaladoA;
+  String? motivoEscalado;
+  String tipoTicket;
+  String? categoria;
+  String? area;
+  String? imagenResolucion;
+
   Ticket({
     required this.id,
     required this.usuario,
@@ -26,6 +33,12 @@ class Ticket {
     this.comoSeResolvio,
     this.pruebasRealizadas,
     this.validadoCon,
+    this.escaladoA,
+    this.motivoEscalado,
+    this.tipoTicket = 'Incidencia',
+    this.categoria,
+    this.area,
+    this.imagenResolucion,
   });
 
   factory Ticket.fromMap(Map<String, dynamic> map) => Ticket(
@@ -41,6 +54,12 @@ class Ticket {
     comoSeResolvio: map['comoSeResolvio'],
     pruebasRealizadas: map['pruebasRealizadas'],
     validadoCon: map['validadoCon'],
+    escaladoA: map['escaladoA'],
+    motivoEscalado: map['motivoEscalado'],
+    tipoTicket: map['tipoTicket'] ?? 'Incidencia',
+    categoria: map['categoria'],
+    area: map['area'],
+    imagenResolucion: map['imagenResolucion'],
   );
 
   Map<String, dynamic> toMap() => {
@@ -52,9 +71,15 @@ class Ticket {
     'estado': estado,
     'asignadoA': asignadoA,
     'fecha': fecha.toIso8601String(),
+    'tipoTicket': tipoTicket,
     if (causaRaiz != null) 'causaRaiz': causaRaiz,
     if (comoSeResolvio != null) 'comoSeResolvio': comoSeResolvio,
     if (pruebasRealizadas != null) 'pruebasRealizadas': pruebasRealizadas,
     if (validadoCon != null) 'validadoCon': validadoCon,
+    if (escaladoA != null) 'escaladoA': escaladoA,
+    if (motivoEscalado != null) 'motivoEscalado': motivoEscalado,
+    if (categoria != null) 'categoria': categoria,
+    if (area != null) 'area': area,
+    if (imagenResolucion != null) 'imagenResolucion': imagenResolucion,
   };
 }

@@ -15,6 +15,8 @@ import 'equipment_screen.dart';
 import 'backups_screen.dart';
 import 'chat_screen.dart';
 import 'users_screen.dart';
+import 'admin_screen.dart';
+import 'reportes_screen.dart';
 import 'login_screen.dart';
 
 const String kWsUrl = 'ws://54.161.41.131:8000/ws';
@@ -106,7 +108,6 @@ class _MainLayoutState extends State<MainLayout> {
     final tipo = datos['tipo'] as String? ?? '';
     if (tipo == 'chat') {
       final msg = ChatMessage.fromMap(datos);
-      // Evitar duplicados (el mismo cliente que envió ya lo tiene si no usamos optimistic)
       if (_mensajes.any((m) => m.id == msg.id)) return;
       setState(() {
         _mensajes = [..._mensajes, msg];
@@ -115,7 +116,7 @@ class _MainLayoutState extends State<MainLayout> {
       if (_screenIndex != 4) {
         NotificationService.lanzarAlertaLocal(
           'Mensaje de ${msg.nombreCompleto}',
-          msg.texto,
+          msg.texto.isNotEmpty ? msg.texto : '📷 Imagen',
         );
       }
     } else if (tipo == 'usuarios') {
@@ -215,12 +216,15 @@ class _MainLayoutState extends State<MainLayout> {
         api: _api,
         onVolver: () => setState(() => _screenIndex = _screenAnterior),
       ),
-      if (widget.session.rol == 'Admin')
+      if (widget.session.rol == 'Admin') ...[
         UsersScreen(
           usuarios: _usuarios,
           api: _api,
           onRefresh: _cargarUsuarios,
         ),
+        AdminScreen(api: _api),
+        ReportesScreen(api: _api),
+      ],
     ];
 
     return Scaffold(
@@ -270,6 +274,8 @@ class _MainLayoutState extends State<MainLayout> {
             if (widget.session.rol == 'Admin') ...[
               const Divider(),
               _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', 5),
+              _item(Icons.settings_rounded, 'Administración', 6),
+              _item(Icons.bar_chart_rounded, 'Reportes', 7),
             ],
           ],
         ),

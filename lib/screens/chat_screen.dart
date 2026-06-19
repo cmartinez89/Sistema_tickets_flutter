@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:js_interop';
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 import '../models/chat_message_model.dart';
 import '../models/session_model.dart';
 import '../services/api_service.dart';
@@ -23,6 +28,37 @@ Color _colorDeUsuario(String username) {
   return _kPaletaColores[hash % _kPaletaColores.length];
 }
 
+Future<String?> _pickChatImage() async {
+  final completer = Completer<String?>();
+  final input = web.document.createElement('input') as web.HTMLInputElement;
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = ((web.Event _) {
+    final files = input.files;
+    if (files == null || files.length == 0) {
+      completer.complete(null);
+      return;
+    }
+    final file = files.item(0)!;
+    final reader = web.FileReader();
+    reader.onload = ((web.ProgressEvent _) {
+      completer.complete(reader.result?.toString());
+    }).toJS;
+    reader.readAsDataURL(file);
+  }).toJS;
+  input.click();
+  return completer.future;
+}
+
+Uint8List? _decodeImage(String? dataUrl) {
+  if (dataUrl == null || !dataUrl.contains(',')) return null;
+  try {
+    return base64Decode(dataUrl.split(',')[1]);
+  } catch (_) {
+    return null;
+  }
+}
+
 class ChatScreen extends StatefulWidget {
   final List<ChatMessage> mensajes;
   final Session session;
@@ -45,6 +81,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _inputCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   bool _enviando = false;
+  String? _imagenSeleccionada;
 
   @override
   void dispose() {
@@ -73,16 +110,26 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  Future<void> _seleccionarImagen() async {
+    final result = await _pickChatImage();
+    if (result != null && mounted) {
+      setState(() => _imagenSeleccionada = result);
+    }
+  }
+
   Future<void> _enviar() async {
     final texto = _inputCtrl.text.trim();
-    if (texto.isEmpty || _enviando) return;
+    if ((texto.isEmpty && _imagenSeleccionada == null) || _enviando) return;
     setState(() => _enviando = true);
+    final imagenEnviar = _imagenSeleccionada;
     _inputCtrl.clear();
+    setState(() => _imagenSeleccionada = null);
     try {
       await widget.api.enviarMensaje(
         widget.session.username,
         widget.session.nombreCompleto,
         texto,
+        imagen: imagenEnviar,
       );
     } catch (e) {
       if (mounted) {
@@ -90,6 +137,7 @@ class _ChatScreenState extends State<ChatScreen> {
           SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
         );
         _inputCtrl.text = texto;
+        setState(() => _imagenSeleccionada = imagenEnviar);
       }
     } finally {
       if (mounted) setState(() => _enviando = false);
@@ -170,6 +218,52 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
           ),
 
+          // Image preview strip
+          if (_imagenSeleccionada != null)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Builder(
+                          builder: (_) {
+                            final bytes = _decodeImage(_imagenSeleccionada);
+                            if (bytes == null) {
+                              return Container(
+                                width: 70, height: 70,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image, color: Colors.grey),
+                              );
+                            }
+                            return Image.memory(bytes, width: 70, height: 70, fit: BoxFit.cover);
+                          },
+                        ),
+                      ),
+                      Positioned(
+                        top: -6,
+                        right: -6,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _imagenSeleccionada = null),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            child: const Icon(Icons.close, color: Colors.white, size: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
+                  Text('Imagen lista para enviar', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+
           // Input
           Container(
             decoration: BoxDecoration(
@@ -198,7 +292,22 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
+                // Image button
+                Material(
+                  color: Colors.grey.shade100,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: _seleccionarImagen,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(Icons.image_rounded, color: Colors.grey.shade600, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // Send button
                 _enviando
                     ? SizedBox(
                         width: 44,
@@ -251,6 +360,8 @@ class _BurbujaMensaje extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imagenBytes = _decodeImage(mensaje.imagen);
+
     return Padding(
       padding: EdgeInsets.only(
         top: mostrarNombre ? 12 : 3,
@@ -299,10 +410,29 @@ class _BurbujaMensaje extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        mensaje.texto,
-                        style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
-                      ),
+                      // Image if present
+                      if (imagenBytes != null) ...[
+                        GestureDetector(
+                          onTap: () => showDialog(
+                            context: context,
+                            builder: (_) => Dialog(
+                              child: InteractiveViewer(
+                                child: Image.memory(imagenBytes),
+                              ),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(imagenBytes, width: 220, fit: BoxFit.cover),
+                          ),
+                        ),
+                        if (mensaje.texto.isNotEmpty) const SizedBox(height: 6),
+                      ],
+                      if (mensaje.texto.isNotEmpty)
+                        Text(
+                          mensaje.texto,
+                          style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
+                        ),
                       const SizedBox(height: 3),
                       Text(
                         _hora(mensaje.fecha),

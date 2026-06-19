@@ -18,6 +18,12 @@ class Equipo {
   DateTime? ultimoRespaldo;
   String comentarios;
 
+  String? area;
+  String? macAddress;
+  String? folioActivo;
+  String? fechaVenta;
+  double? precioVenta;
+
   Equipo({
     required this.id,
     required this.folioResponsiva,
@@ -37,6 +43,11 @@ class Equipo {
     this.rustdesk = '',
     this.ultimoRespaldo,
     this.comentarios = '',
+    this.area,
+    this.macAddress,
+    this.folioActivo,
+    this.fechaVenta,
+    this.precioVenta,
   });
 
   int? get diasUltimoRespaldo {
@@ -50,6 +61,8 @@ class Equipo {
     if (anos >= 5) return valorAdquisicion * 0.20;
     return valorAdquisicion * (1.0 - anos * 0.20);
   }
+
+  bool get esObsoleto => DateTime.now().year - anoAdquisicion >= 5;
 
   factory Equipo.fromMap(Map<String, dynamic> map) => Equipo(
     id: map['id'],
@@ -72,6 +85,11 @@ class Equipo {
         ? DateTime.parse(map['ultimoRespaldo'])
         : null,
     comentarios: map['comentarios'] ?? '',
+    area: map['area'],
+    macAddress: map['macAddress'],
+    folioActivo: map['folioActivo'],
+    fechaVenta: map['fechaVenta']?.toString(),
+    precioVenta: (map['precioVenta'] as num?)?.toDouble(),
   );
 
   Map<String, dynamic> toMap() => {
@@ -93,5 +111,10 @@ class Equipo {
     'rustdesk': rustdesk,
     if (ultimoRespaldo != null) 'ultimoRespaldo': ultimoRespaldo!.toIso8601String(),
     'comentarios': comentarios,
+    if (area != null) 'area': area,
+    if (macAddress != null) 'macAddress': macAddress,
+    if (folioActivo != null) 'folioActivo': folioActivo,
+    if (fechaVenta != null) 'fechaVenta': fechaVenta,
+    if (precioVenta != null) 'precioVenta': precioVenta,
   };
 }

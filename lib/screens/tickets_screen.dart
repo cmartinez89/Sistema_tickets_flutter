@@ -1,8 +1,33 @@
+import 'dart:async';
+import 'dart:js_interop';
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 import '../models/ticket_model.dart';
 import '../models/session_model.dart';
 import '../models/usuario_model.dart';
 import '../services/api_service.dart';
+
+Future<String?> _pickImageBase64() async {
+  final completer = Completer<String?>();
+  final input = web.document.createElement('input') as web.HTMLInputElement;
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = ((web.Event _) {
+    final files = input.files;
+    if (files == null || files.length == 0) {
+      completer.complete(null);
+      return;
+    }
+    final file = files.item(0)!;
+    final reader = web.FileReader();
+    reader.onload = ((web.ProgressEvent _) {
+      completer.complete(reader.result?.toString());
+    }).toJS;
+    reader.readAsDataURL(file);
+  }).toJS;
+  input.click();
+  return completer.future;
+}
 
 class TicketsScreen extends StatefulWidget {
   final List<Ticket> tickets;
@@ -11,7 +36,14 @@ class TicketsScreen extends StatefulWidget {
   final ApiService api;
   final VoidCallback onRefresh;
 
-  const TicketsScreen({super.key, required this.tickets, required this.usuarios, required this.session, required this.api, required this.onRefresh});
+  const TicketsScreen({
+    super.key,
+    required this.tickets,
+    required this.usuarios,
+    required this.session,
+    required this.api,
+    required this.onRefresh,
+  });
 
   @override
   State<TicketsScreen> createState() => _TicketsScreenState();
@@ -25,164 +57,625 @@ class _TicketsScreenState extends State<TicketsScreen> {
   String _prioridad = 'Media';
   String _asignado = 'Sin Asignar';
   String _filtro = 'Activos';
+  String? _filtroArea;
+  String? _filtroPrioridad;
   bool _clearSession = false;
+  String? _nuevaCategoria;
+  String? _nuevaArea;
 
-  List<String> get _kTecnicos => ['Sin Asignar', ...widget.usuarios.map((u) => u.username)];
+  List<Map<String, dynamic>> _categorias = [];
+  List<Map<String, dynamic>> _areas = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarCatalogos();
+  }
+
+  Future<void> _cargarCatalogos() async {
+    try {
+      final results = await Future.wait([
+        widget.api.fetchCategorias(),
+        widget.api.fetchAreas(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _categorias = results[0];
+          _areas = results[1];
+        });
+      }
+    } catch (_) {}
+  }
+
+  List<String> get _kTecnicos =>
+      ['Sin Asignar', ...widget.usuarios.map((u) => u.username)];
 
   String _nombreTecnico(String username) {
     if (username == 'Sin Asignar') return 'Sin Asignar';
-    final u = widget.usuarios.where((u) => u.username == username).firstOrNull;
+    final u =
+        widget.usuarios.where((u) => u.username == username).firstOrNull;
     return u?.nombreCompleto ?? username;
   }
 
   Color statusColor(String estado) {
     switch (estado) {
-      case 'Pendiente': return Colors.red.shade700;
-      case 'En Proceso': return Colors.orange.shade800;
-      case 'Resuelto': return Colors.green.shade700;
-      default: return Colors.grey;
+      case 'Pendiente':
+        return Colors.red.shade700;
+      case 'En Proceso':
+        return Colors.orange.shade800;
+      case 'Resuelto':
+        return Colors.green.shade700;
+      case 'Escalado':
+        return Colors.purple.shade700;
+      default:
+        return Colors.grey;
     }
+  }
+
+  Color _prioColor(String p) {
+    switch (p) {
+      case 'Alta':
+        return Colors.red.shade700;
+      case 'Media':
+        return Colors.orange.shade700;
+      case 'Baja':
+        return Colors.green.shade600;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _formatFecha(DateTime fecha) {
+    return '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')} '
+        '${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatDuracion(Duration d) {
+    if (d.inDays > 0) return '${d.inDays}d ${d.inHours.remainder(24)}h';
+    if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes.remainder(60)}m';
+    return '${d.inMinutes}m';
+  }
+
+  String _tiempoDesde(DateTime fecha) {
+    final diff = DateTime.now().difference(fecha);
+    return _formatDuracion(diff);
   }
 
   void _abrirDialogoEditar(Ticket t) {
     String nuevoEstado = t.estado;
     String nuevoAsignado = t.asignadoA;
+    String tipoTicket = t.tipoTicket ?? 'Incidencia';
     final causaCtrl = TextEditingController(text: t.causaRaiz ?? '');
     final resolverCtrl = TextEditingController(text: t.comoSeResolvio ?? '');
-    final pruebasCtrl = TextEditingController(text: t.pruebasRealizadas ?? '');
+    final pruebasCtrl =
+        TextEditingController(text: t.pruebasRealizadas ?? '');
     final validadoCtrl = TextEditingController(text: t.validadoCon ?? '');
+    final escaladoACtrl = TextEditingController(text: t.escaladoA ?? '');
+    final motivoEscaladoCtrl =
+        TextEditingController(text: t.motivoEscalado ?? '');
+    String? imagenBase64;
     bool guardando = false;
+    List<Map<String, dynamic>> historial = [];
+    bool loadingHistorial = true;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDs) => AlertDialog(
-          title: Text('${t.id} — ${t.usuario}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 420,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Depto: ${t.departamento}  •  Prioridad: ${t.prioridad}', style: const TextStyle(color: Colors.blueGrey, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Text(t.descripcion),
-                  const Divider(height: 24),
-                  DropdownButtonFormField<String>(
-                    initialValue: nuevoEstado,
-                    decoration: const InputDecoration(labelText: 'Estado', border: OutlineInputBorder()),
-                    items: ['Pendiente', 'En Proceso', 'Resuelto'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                    onChanged: (v) => setDs(() => nuevoEstado = v!),
-                  ),
-                  if (widget.session.rol == 'Admin') ...[
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: nuevoAsignado,
-                      decoration: const InputDecoration(labelText: 'Técnico Responsable', border: OutlineInputBorder()),
-                      items: _kTecnicos.map((e) => DropdownMenuItem(value: e, child: Text(_nombreTecnico(e)))).toList(),
-                      onChanged: (v) => setDs(() => nuevoAsignado = v!),
+        builder: (ctx, setDs) {
+          // Load historial once
+          if (loadingHistorial) {
+            widget.api.fetchHistorial(t.id).then((h) {
+              if (ctx.mounted) setDs(() { historial = h; loadingHistorial = false; });
+            }).catchError((_) {
+              if (ctx.mounted) setDs(() => loadingHistorial = false);
+            });
+          }
+
+          return AlertDialog(
+            title: Text(
+              '${t.id} — ${t.usuario}',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            content: SingleChildScrollView(
+              child: SizedBox(
+                width: 460,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Depto: ${t.departamento}  •  Prioridad: ${t.prioridad}  •  Creado: ${_formatFecha(t.fecha)}',
+                      style:
+                          const TextStyle(color: Colors.blueGrey, fontSize: 12),
                     ),
-                  ],
-                  if (nuevoEstado == 'Resuelto') ...[
+                    if (t.categoria != null)
+                      Text('Categoría: ${t.categoria}',
+                          style: const TextStyle(
+                              color: Colors.blueGrey, fontSize: 12)),
+                    const SizedBox(height: 6),
+                    Text(t.descripcion),
+                    if (t.estado == 'Escalado' &&
+                        t.escaladoA != null) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: Colors.purple.shade200),
+                        ),
+                        child: Text(
+                          'Escalado a: ${t.escaladoA}\nMotivo: ${t.motivoEscalado ?? "—"}',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.purple.shade800),
+                        ),
+                      ),
+                    ],
                     const Divider(height: 24),
-                    const Text('Detalle de resolución', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    const SizedBox(height: 10),
-                    TextFormField(controller: causaCtrl, decoration: const InputDecoration(labelText: 'Causa raíz', border: OutlineInputBorder()), maxLines: 2),
-                    const SizedBox(height: 10),
-                    TextFormField(controller: resolverCtrl, decoration: const InputDecoration(labelText: 'Cómo se resolvió', border: OutlineInputBorder()), maxLines: 2),
-                    const SizedBox(height: 10),
-                    TextFormField(controller: pruebasCtrl, decoration: const InputDecoration(labelText: 'Pruebas realizadas', border: OutlineInputBorder()), maxLines: 2),
-                    const SizedBox(height: 10),
-                    TextFormField(controller: validadoCtrl, decoration: const InputDecoration(labelText: 'Validado con', border: OutlineInputBorder())),
+
+                    // Historial timing
+                    if (!loadingHistorial && historial.isNotEmpty) ...[
+                      const Text(
+                        'Tiempo en cada estado',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      ...List.generate(historial.length, (i) {
+                        final h = historial[i];
+                        final desde = DateTime.tryParse(
+                                h['fecha']?.toString() ?? '') ??
+                            DateTime.now();
+                        final hasta = i + 1 < historial.length
+                            ? DateTime.tryParse(
+                                    historial[i + 1]['fecha']
+                                            ?.toString() ??
+                                        '') ??
+                                DateTime.now()
+                            : DateTime.now();
+                        final dur = hasta.difference(desde);
+                        return Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: 2),
+                          child: Row(
+                            children: [
+                              _estadoChip(
+                                  h['estado_nuevo']?.toString() ??
+                                      ''),
+                              const SizedBox(width: 6),
+                              Text(
+                                _formatDuracion(dur),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      const Divider(height: 24),
+                    ],
+
+                    DropdownButtonFormField<String>(
+                      value: nuevoEstado,
+                      decoration: const InputDecoration(
+                          labelText: 'Estado',
+                          border: OutlineInputBorder()),
+                      items: [
+                        'Pendiente',
+                        'En Proceso',
+                        'Escalado',
+                        'Resuelto'
+                      ]
+                          .map((e) => DropdownMenuItem(
+                              value: e, child: Text(e)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDs(() => nuevoEstado = v!),
+                    ),
+                    if (widget.session.rol == 'Admin') ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: nuevoAsignado,
+                        decoration: const InputDecoration(
+                            labelText: 'Técnico Responsable',
+                            border: OutlineInputBorder()),
+                        items: _kTecnicos
+                            .map((e) => DropdownMenuItem(
+                                value: e,
+                                child: Text(_nombreTecnico(e))))
+                            .toList(),
+                        onChanged: (v) =>
+                            setDs(() => nuevoAsignado = v!),
+                      ),
+                    ],
+
+                    // ESCALADO fields
+                    if (nuevoEstado == 'Escalado') ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: escaladoACtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'A quién se escaló',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: motivoEscaladoCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Motivo del escalado',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+
+                    // RESUELTO fields
+                    if (nuevoEstado == 'Resuelto') ...[
+                      const Divider(height: 24),
+                      const Text(
+                        'Detalle de resolución',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13),
+                      ),
+                      const SizedBox(height: 10),
+                      SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                              value: 'Incidencia',
+                              label: Text('Incidencia'),
+                              icon: Icon(Icons.bug_report_rounded,
+                                  size: 14)),
+                          ButtonSegment(
+                              value: 'Servicio',
+                              label: Text('Servicio'),
+                              icon: Icon(Icons.build_circle_rounded,
+                                  size: 14)),
+                        ],
+                        selected: {tipoTicket},
+                        onSelectionChanged: (s) =>
+                            setDs(() => tipoTicket = s.first),
+                        style: const ButtonStyle(
+                            visualDensity: VisualDensity.compact),
+                      ),
+                      const SizedBox(height: 12),
+                      if (tipoTicket == 'Incidencia') ...[
+                        TextFormField(
+                          controller: causaCtrl,
+                          decoration: const InputDecoration(
+                              labelText: 'Causa raíz',
+                              border: OutlineInputBorder()),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: resolverCtrl,
+                          decoration: const InputDecoration(
+                              labelText: 'Cómo se resolvió',
+                              border: OutlineInputBorder()),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: pruebasCtrl,
+                          decoration: const InputDecoration(
+                              labelText: 'Pruebas realizadas',
+                              border: OutlineInputBorder()),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      TextFormField(
+                        controller: validadoCtrl,
+                        decoration: const InputDecoration(
+                            labelText: 'Validado con',
+                            border: OutlineInputBorder()),
+                      ),
+                      const SizedBox(height: 10),
+                      // Image picker
+                      Row(
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              final img =
+                                  await _pickImageBase64();
+                              if (img != null) {
+                                setDs(() => imagenBase64 = img);
+                              }
+                            },
+                            icon: const Icon(
+                                Icons.image_rounded,
+                                size: 16),
+                            label: Text(imagenBase64 != null
+                                ? 'Imagen adjunta ✓'
+                                : 'Adjuntar imagen (opcional)'),
+                          ),
+                          if (imagenBase64 != null) ...[
+                            const SizedBox(width: 8),
+                            IconButton(
+                              icon: const Icon(Icons.close,
+                                  size: 16),
+                              onPressed: () =>
+                                  setDs(() => imagenBase64 = null),
+                              tooltip: 'Quitar imagen',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.primary, foregroundColor: Colors.white),
-              onPressed: guardando ? null : () async {
-                setDs(() => guardando = true);
-                try {
-                  if (nuevoEstado == 'Resuelto') {
-                    await widget.api.resolverTicket(t.id,
-                      causaRaiz: causaCtrl.text.trim(),
-                      comoSeResolvio: resolverCtrl.text.trim(),
-                      pruebasRealizadas: pruebasCtrl.text.trim(),
-                      validadoCon: validadoCtrl.text.trim(),
-                    );
-                  } else if (nuevoEstado != t.estado) {
-                    await widget.api.cambiarEstatusTicket(t.id, nuevoEstado);
-                  }
-                  if (nuevoAsignado != t.asignadoA) {
-                    await widget.api.reasignarTicket(t.id, nuevoAsignado);
-                  }
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  widget.onRefresh();
-                } catch (e) {
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                } finally {
-                  if (ctx.mounted) setDs(() => guardando = false);
-                }
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancelar')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      Theme.of(ctx).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: guardando
+                    ? null
+                    : () async {
+                        setDs(() => guardando = true);
+                        try {
+                          if (nuevoEstado == 'Resuelto') {
+                            await widget.api.resolverTicket(
+                              t.id,
+                              causaRaiz: causaCtrl.text.trim(),
+                              comoSeResolvio:
+                                  resolverCtrl.text.trim(),
+                              pruebasRealizadas:
+                                  pruebasCtrl.text.trim(),
+                              validadoCon:
+                                  validadoCtrl.text.trim(),
+                              tipoTicket: tipoTicket,
+                              imagenResolucion: imagenBase64,
+                            );
+                          } else if (nuevoEstado == 'Escalado') {
+                            await widget.api.escalarTicket(
+                              t.id,
+                              escaladoA:
+                                  escaladoACtrl.text.trim(),
+                              motivoEscalado:
+                                  motivoEscaladoCtrl.text.trim(),
+                              usuario: widget.session.username,
+                            );
+                          } else if (nuevoEstado != t.estado) {
+                            await widget.api.cambiarEstatusTicket(
+                                t.id, nuevoEstado,
+                                usuario: widget.session.username);
+                          }
+                          if (nuevoAsignado != t.asignadoA) {
+                            await widget.api
+                                .reasignarTicket(t.id, nuevoAsignado);
+                          }
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          widget.onRefresh();
+                        } catch (e) {
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
+                          }
+                        } finally {
+                          if (ctx.mounted)
+                            setDs(() => guardando = false);
+                        }
+                      },
+                child: const Text('Guardar'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
+  Widget _estadoChip(String estado) {
+    final color = statusColor(estado);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(estado,
+          style: TextStyle(
+              fontSize: 10,
+              color: color,
+              fontWeight: FontWeight.bold)),
+    );
+  }
+
   void _abrirDialogoNuevo() {
-    _usuarioCtrl.clear(); _deptoCtrl.clear(); _descCtrl.clear(); _prioridad = 'Media'; _asignado = 'Sin Asignar'; _clearSession = false;
+    _usuarioCtrl.clear();
+    _deptoCtrl.clear();
+    _descCtrl.clear();
+    _prioridad = 'Media';
+    _asignado = 'Sin Asignar';
+    _nuevaCategoria = null;
+    _nuevaArea = null;
+    _clearSession = false;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDs) => AlertDialog(
-          title: const Text('Levantar Reporte Técnico', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text('Levantar Reporte Técnico',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Form(
               key: _formKey,
               child: SizedBox(
-                width: 400,
+                width: 420,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextFormField(controller: _usuarioCtrl, decoration: const InputDecoration(labelText: 'Usuario Afectado', border: OutlineInputBorder()), validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null),
+                    TextFormField(
+                      controller: _usuarioCtrl,
+                      decoration: const InputDecoration(
+                          labelText: 'Usuario Afectado',
+                          border: OutlineInputBorder()),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty)
+                              ? 'Requerido'
+                              : null,
+                    ),
                     const SizedBox(height: 12),
-                    TextFormField(controller: _deptoCtrl, decoration: const InputDecoration(labelText: 'Departamento', border: OutlineInputBorder()), validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null),
+                    TextFormField(
+                      controller: _deptoCtrl,
+                      decoration: const InputDecoration(
+                          labelText: 'Departamento',
+                          border: OutlineInputBorder()),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty)
+                              ? 'Requerido'
+                              : null,
+                    ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(initialValue: _prioridad, decoration: const InputDecoration(labelText: 'Prioridad', border: OutlineInputBorder()), items: ['Baja', 'Media', 'Alta'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(), onChanged: (v) => setDs(() => _prioridad = v!)),
+                    DropdownButtonFormField<String>(
+                      value: _prioridad,
+                      decoration: const InputDecoration(
+                          labelText: 'Prioridad',
+                          border: OutlineInputBorder()),
+                      items: ['Baja', 'Media', 'Alta']
+                          .map((p) => DropdownMenuItem(
+                              value: p, child: Text(p)))
+                          .toList(),
+                      onChanged: (v) =>
+                          setDs(() => _prioridad = v!),
+                    ),
                     const SizedBox(height: 12),
-                    if (widget.session.rol == 'Admin') DropdownButtonFormField<String>(initialValue: _asignado, decoration: const InputDecoration(labelText: 'Técnico Responsable', border: OutlineInputBorder()), items: _kTecnicos.map((p) => DropdownMenuItem(value: p, child: Text(_nombreTecnico(p)))).toList(), onChanged: (v) => setDs(() => _asignado = v!)),
-                    const SizedBox(height: 12),
-                    TextFormField(controller: _descCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Descripción de la falla', border: OutlineInputBorder()), validator: (v) => (v == null || v.trim().isEmpty) ? 'Explique el problema' : null),
+                    if (_categorias.isNotEmpty)
+                      DropdownButtonFormField<String?>(
+                        value: _nuevaCategoria,
+                        decoration: const InputDecoration(
+                            labelText: 'Categoría',
+                            border: OutlineInputBorder()),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Sin categoría')),
+                          ..._categorias.map((c) =>
+                              DropdownMenuItem<String?>(
+                                  value: c['nombre']?.toString(),
+                                  child: Text(
+                                      c['nombre']?.toString() ??
+                                          ''))),
+                        ],
+                        onChanged: (v) =>
+                            setDs(() => _nuevaCategoria = v),
+                      ),
+                    if (_categorias.isNotEmpty)
+                      const SizedBox(height: 12),
+                    if (_areas.isNotEmpty)
+                      DropdownButtonFormField<String?>(
+                        value: _nuevaArea,
+                        decoration: const InputDecoration(
+                            labelText: 'Área',
+                            border: OutlineInputBorder()),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Sin área')),
+                          ..._areas.map((a) =>
+                              DropdownMenuItem<String?>(
+                                  value: a['nombre']?.toString(),
+                                  child: Text(
+                                      a['nombre']?.toString() ??
+                                          ''))),
+                        ],
+                        onChanged: (v) =>
+                            setDs(() => _nuevaArea = v),
+                      ),
+                    if (_areas.isNotEmpty)
+                      const SizedBox(height: 12),
+                    if (widget.session.rol == 'Admin')
+                      DropdownButtonFormField<String>(
+                        value: _asignado,
+                        decoration: const InputDecoration(
+                            labelText: 'Técnico Responsable',
+                            border: OutlineInputBorder()),
+                        items: _kTecnicos
+                            .map((p) => DropdownMenuItem(
+                                value: p,
+                                child: Text(_nombreTecnico(p))))
+                            .toList(),
+                        onChanged: (v) =>
+                            setDs(() => _asignado = v!),
+                      ),
+                    if (widget.session.rol == 'Admin')
+                      const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _descCtrl,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                          labelText: 'Descripción de la falla',
+                          border: OutlineInputBorder()),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty)
+                              ? 'Explique el problema'
+                              : null,
+                    ),
                   ],
                 ),
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancelar')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.primary, foregroundColor: Colors.white),
-              onPressed: _clearSession ? null : () async {
-                if (!_formKey.currentState!.validate()) return;
-                setDs(() => _clearSession = true);
-                final nuevo = Ticket(id: '', usuario: _usuarioCtrl.text.trim(), departamento: _deptoCtrl.text.trim(), descripcion: _descCtrl.text.trim(), prioridad: _prioridad, estado: 'Pendiente', asignadoA: widget.session.rol == 'Admin' ? _asignado : 'Sin Asignar', fecha: DateTime.now());
-                try { 
-                  await widget.api.crearTicket(nuevo); 
-                  if (ctx.mounted) Navigator.pop(ctx); 
-                  widget.onRefresh(); 
-                } catch (e) { 
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); 
-                } finally {
-                  if (ctx.mounted) setDs(() => _clearSession = false);
-                }
-              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                      Theme.of(ctx).colorScheme.primary,
+                  foregroundColor: Colors.white),
+              onPressed: _clearSession
+                  ? null
+                  : () async {
+                      if (!_formKey.currentState!.validate()) return;
+                      setDs(() => _clearSession = true);
+                      final asignado =
+                          widget.session.rol == 'Admin'
+                              ? _asignado
+                              : widget.session.username;
+                      final nuevo = Ticket(
+                        id: '',
+                        usuario: _usuarioCtrl.text.trim(),
+                        departamento: _deptoCtrl.text.trim(),
+                        descripcion: _descCtrl.text.trim(),
+                        prioridad: _prioridad,
+                        estado: 'Pendiente',
+                        asignadoA: asignado,
+                        fecha: DateTime.now(),
+                        categoria: _nuevaCategoria,
+                        area: _nuevaArea,
+                      );
+                      try {
+                        await widget.api.crearTicket(nuevo);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        widget.onRefresh();
+                      } catch (e) {
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error: $e')));
+                        }
+                      } finally {
+                        if (ctx.mounted)
+                          setDs(() => _clearSession = false);
+                      }
+                    },
               child: const Text('Registrar'),
             )
           ],
@@ -193,10 +686,39 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<Ticket> lista = widget.session.rol == 'Admin' ? widget.tickets : widget.tickets.where((t) => t.asignadoA.toLowerCase() == widget.session.username.toLowerCase()).toList();
-    if (_filtro == 'Activos') lista = lista.where((t) => t.estado != 'Resuelto').toList();
-    if (_filtro == 'Resueltos') lista = lista.where((t) => t.estado == 'Resuelto').toList();
-    // 'Todos' muestra sin filtro adicional
+    List<Ticket> lista = widget.session.rol == 'Admin'
+        ? widget.tickets
+        : widget.tickets
+            .where((t) =>
+                t.asignadoA.toLowerCase() ==
+                widget.session.username.toLowerCase())
+            .toList();
+
+    if (_filtro == 'Activos') {
+      lista = lista.where((t) => t.estado != 'Resuelto').toList();
+    } else if (_filtro == 'Resueltos') {
+      lista = lista.where((t) => t.estado == 'Resuelto').toList();
+    }
+    if (_filtroArea != null) {
+      lista = lista
+          .where((t) =>
+              t.area == _filtroArea ||
+              t.departamento == _filtroArea)
+          .toList();
+    }
+    if (_filtroPrioridad != null) {
+      lista = lista
+          .where((t) => t.prioridad == _filtroPrioridad)
+          .toList();
+    }
+
+    final areaOpciones = {
+      ..._areas.map((a) => a['nombre']?.toString() ?? ''),
+      ...widget.tickets
+          .map((t) => t.departamento)
+          .where((d) => d.isNotEmpty),
+    }.toList()
+      ..sort();
 
     return Scaffold(
       body: Padding(
@@ -206,7 +728,13 @@ class _TicketsScreenState extends State<TicketsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Consola Soporte (${lista.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
+                Text(
+                  'Consola Soporte (${lista.length})',
+                  style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueGrey),
+                ),
                 ElevatedButton.icon(
                   onPressed: _abrirDialogoNuevo,
                   icon: const Icon(Icons.add, size: 16),
@@ -215,43 +743,178 @@ class _TicketsScreenState extends State<TicketsScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'Activos', label: Text('Activos'), icon: Icon(Icons.check_circle_outline, size: 14)),
-                  ButtonSegment(value: 'Resueltos', label: Text('Resueltos')),
-                  ButtonSegment(value: 'Todos', label: Text('Todos')),
-                ],
-                selected: {_filtro},
-                onSelectionChanged: (s) => setState(() => _filtro = s.first),
-                style: const ButtonStyle(visualDensity: VisualDensity.compact),
-              ),
+            // Filters row
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                        value: 'Activos',
+                        label: Text('Activos'),
+                        icon: Icon(Icons.check_circle_outline,
+                            size: 14)),
+                    ButtonSegment(
+                        value: 'Resueltos',
+                        label: Text('Resueltos')),
+                    ButtonSegment(
+                        value: 'Todos', label: Text('Todos')),
+                  ],
+                  selected: {_filtro},
+                  onSelectionChanged: (s) =>
+                      setState(() => _filtro = s.first),
+                  style: const ButtonStyle(
+                      visualDensity: VisualDensity.compact),
+                ),
+                if (areaOpciones.isNotEmpty)
+                  DropdownButton<String?>(
+                    value: _filtroArea,
+                    hint: const Text('Área',
+                        style: TextStyle(fontSize: 13)),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Todas las áreas',
+                              style: TextStyle(fontSize: 13))),
+                      ...areaOpciones.map((a) =>
+                          DropdownMenuItem<String?>(
+                              value: a,
+                              child: Text(a,
+                                  style: const TextStyle(
+                                      fontSize: 13)))),
+                    ],
+                    onChanged: (v) =>
+                        setState(() => _filtroArea = v),
+                    underline: Container(
+                        height: 1,
+                        color: Colors.blueGrey.shade200),
+                  ),
+                DropdownButton<String?>(
+                  value: _filtroPrioridad,
+                  hint: const Text('Prioridad',
+                      style: TextStyle(fontSize: 13)),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Todas',
+                            style: TextStyle(fontSize: 13))),
+                    ...['Alta', 'Media', 'Baja'].map((p) =>
+                        DropdownMenuItem<String?>(
+                            value: p,
+                            child: Text(p,
+                                style: const TextStyle(
+                                    fontSize: 13)))),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _filtroPrioridad = v),
+                  underline: Container(
+                      height: 1,
+                      color: Colors.blueGrey.shade200),
+                ),
+                if (_filtroArea != null || _filtroPrioridad != null)
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _filtroArea = null;
+                      _filtroPrioridad = null;
+                    }),
+                    icon: const Icon(Icons.clear, size: 14),
+                    label: const Text('Limpiar',
+                        style: TextStyle(fontSize: 12)),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView.builder(
-                itemCount: lista.length,
-                itemBuilder: (_, i) {
-                  final t = lista[i];
-                  return Card(
-                    child: ListTile(
-                      onTap: () => _abrirDialogoEditar(t),
-                      title: Text(t.descripcion),
-                      subtitle: Text('${t.id} • ${t.usuario} — ${t.departamento} • Asignado: ${_nombreTecnico(t.asignadoA)}'),
-                      trailing: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: statusColor(t.estado).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8)
-                        ),
-                        child: Text(t.estado, style: TextStyle(color: statusColor(t.estado), fontWeight: FontWeight.bold)),
+              child: lista.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.inbox_rounded,
+                              size: 48,
+                              color: Colors.grey.shade300),
+                          const SizedBox(height: 8),
+                          Text('Sin tickets',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400)),
+                        ],
                       ),
+                    )
+                  : ListView.builder(
+                      itemCount: lista.length,
+                      itemBuilder: (_, i) {
+                        final t = lista[i];
+                        final sColor = statusColor(t.estado);
+                        final pColor = _prioColor(t.prioridad);
+                        return Card(
+                          child: ListTile(
+                            onTap: () => _abrirDialogoEditar(t),
+                            title: Text(t.descripcion,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                              '${t.id} • ${t.usuario} — ${t.departamento} • ${_formatFecha(t.fecha)} (${_tiempoDesde(t.fecha)})',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            trailing: Column(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.end,
+                              children: [
+                                Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: sColor
+                                        .withValues(alpha: 0.1),
+                                    borderRadius:
+                                        BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    t.estado,
+                                    style: TextStyle(
+                                        color: sColor,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                        fontSize: 11),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: pColor
+                                        .withValues(alpha: 0.1),
+                                    borderRadius:
+                                        BorderRadius.circular(6),
+                                    border: Border.all(
+                                        color: pColor
+                                            .withValues(alpha: 0.3)),
+                                  ),
+                                  child: Text(
+                                    t.prioridad,
+                                    style: TextStyle(
+                                        color: pColor,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                        fontSize: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
-            )
+            ),
           ],
         ),
       ),

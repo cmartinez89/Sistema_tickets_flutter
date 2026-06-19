@@ -4,6 +4,7 @@ class ChatMessage {
   final String nombreCompleto;
   final String texto;
   final DateTime fecha;
+  final String? imagen;
 
   ChatMessage({
     required this.id,
@@ -11,6 +12,7 @@ class ChatMessage {
     required this.nombreCompleto,
     required this.texto,
     required this.fecha,
+    this.imagen,
   });
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) => ChatMessage(
@@ -19,5 +21,6 @@ class ChatMessage {
     nombreCompleto: map['nombreCompleto'] ?? '',
     texto: map['texto'] ?? '',
     fecha: DateTime.tryParse(map['fecha'] ?? '') ?? DateTime.now(),
+    imagen: map['imagen'],
   );
 }

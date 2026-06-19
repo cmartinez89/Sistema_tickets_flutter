@@ -27,6 +27,7 @@ class DashboardScreen extends StatelessWidget {
     final pendientes = visibles.where((t) => t.estado == 'Pendiente').length;
     final enProceso = visibles.where((t) => t.estado == 'En Proceso').length;
     final resueltos = visibles.where((t) => t.estado == 'Resuelto').length;
+    final escalados = visibles.where((t) => t.estado == 'Escalado').length;
     final alta = visibles.where((t) => t.prioridad == 'Alta' && t.estado != 'Resuelto').length;
 
     final totalEquipos = inventario.length;
@@ -64,9 +65,9 @@ class DashboardScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _headerCard(),
-                if (pendientes > 0 || alta > 0 || sinRespaldo > 0) ...[
+                if (pendientes > 0 || alta > 0 || sinRespaldo > 0 || escalados > 0) ...[
                   const SizedBox(height: 14),
-                  _alertStrip(pendientes: pendientes, alta: alta, sinRespaldo: sinRespaldo),
+                  _alertStrip(pendientes: pendientes, alta: alta, sinRespaldo: sinRespaldo, escalados: escalados),
                 ],
                 const SizedBox(height: 28),
 
@@ -167,7 +168,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _alertStrip({required int pendientes, required int alta, required int sinRespaldo}) {
+  Widget _alertStrip({required int pendientes, required int alta, required int sinRespaldo, int escalados = 0}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -186,6 +187,7 @@ class DashboardScreen extends StatelessWidget {
               children: [
                 if (pendientes > 0) _alertChip('$pendientes pendiente${pendientes > 1 ? 's' : ''}', Colors.red.shade600, Icons.hourglass_top_rounded, () => onNavigate(1)),
                 if (alta > 0) _alertChip('$alta prioridad alta', Colors.deepOrange.shade700, Icons.priority_high_rounded, () => onNavigate(1)),
+                if (escalados > 0) _alertChip('$escalados escalado${escalados > 1 ? 's' : ''}', Colors.purple.shade700, Icons.escalator_warning_rounded, () => onNavigate(1)),
                 if (sinRespaldo > 0) _alertChip('$sinRespaldo sin respaldo', Colors.amber.shade800, Icons.cloud_off_rounded, () => onNavigate(3)),
               ],
             ),
