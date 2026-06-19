@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/ticket_model.dart';
 import '../models/session_model.dart';
+import '../models/usuario_model.dart';
 import '../services/api_service.dart';
 
 class TicketsScreen extends StatefulWidget {
   final List<Ticket> tickets;
+  final List<Usuario> usuarios;
   final Session session;
   final ApiService api;
   final VoidCallback onRefresh;
 
-  const TicketsScreen({super.key, required this.tickets, required this.session, required this.api, required this.onRefresh});
+  const TicketsScreen({super.key, required this.tickets, required this.usuarios, required this.session, required this.api, required this.onRefresh});
 
   @override
   State<TicketsScreen> createState() => _TicketsScreenState();
@@ -25,7 +27,13 @@ class _TicketsScreenState extends State<TicketsScreen> {
   String _filtro = 'Activos';
   bool _clearSession = false;
 
-  final List<String> kTecnicos = const ['Sin Asignar', 'Carlos', 'Benjamin', 'Julio'];
+  List<String> get _kTecnicos => ['Sin Asignar', ...widget.usuarios.map((u) => u.username)];
+
+  String _nombreTecnico(String username) {
+    if (username == 'Sin Asignar') return 'Sin Asignar';
+    final u = widget.usuarios.where((u) => u.username == username).firstOrNull;
+    return u?.nombreCompleto ?? username;
+  }
 
   Color statusColor(String estado) {
     switch (estado) {
@@ -72,7 +80,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     DropdownButtonFormField<String>(
                       initialValue: nuevoAsignado,
                       decoration: const InputDecoration(labelText: 'Técnico Responsable', border: OutlineInputBorder()),
-                      items: kTecnicos.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      items: _kTecnicos.map((e) => DropdownMenuItem(value: e, child: Text(_nombreTecnico(e)))).toList(),
                       onChanged: (v) => setDs(() => nuevoAsignado = v!),
                     ),
                   ],
@@ -149,7 +157,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(initialValue: _prioridad, decoration: const InputDecoration(labelText: 'Prioridad', border: OutlineInputBorder()), items: ['Baja', 'Media', 'Alta'].map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(), onChanged: (v) => setDs(() => _prioridad = v!)),
                     const SizedBox(height: 12),
-                    if (widget.session.rol == 'Admin') DropdownButtonFormField<String>(initialValue: _asignado, decoration: const InputDecoration(labelText: 'Técnico Responsable', border: OutlineInputBorder()), items: kTecnicos.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(), onChanged: (v) => setDs(() => _asignado = v!)),
+                    if (widget.session.rol == 'Admin') DropdownButtonFormField<String>(initialValue: _asignado, decoration: const InputDecoration(labelText: 'Técnico Responsable', border: OutlineInputBorder()), items: _kTecnicos.map((p) => DropdownMenuItem(value: p, child: Text(_nombreTecnico(p)))).toList(), onChanged: (v) => setDs(() => _asignado = v!)),
                     const SizedBox(height: 12),
                     TextFormField(controller: _descCtrl, maxLines: 3, decoration: const InputDecoration(labelText: 'Descripción de la falla', border: OutlineInputBorder()), validator: (v) => (v == null || v.trim().isEmpty) ? 'Explique el problema' : null),
                   ],
@@ -227,7 +235,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     child: ListTile(
                       onTap: () => _abrirDialogoEditar(t),
                       title: Text(t.descripcion),
-                      subtitle: Text('${t.id} • ${t.usuario} — ${t.departamento} • Asignado: ${t.asignadoA}'),
+                      subtitle: Text('${t.id} • ${t.usuario} — ${t.departamento} • Asignado: ${_nombreTecnico(t.asignadoA)}'),
                       trailing: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
 import '../models/chat_message_model.dart';
+import '../models/usuario_model.dart';
 
 const String kApiUrl = 'http://54.161.41.131:8000';
 const Duration kTimeout = Duration(seconds: 15);
@@ -74,6 +75,49 @@ class ApiService {
   Future<void> actualizarRespaldo(String id, DateTime fecha) async {
     final res = await http.put(Uri.parse('$kApiUrl/equipos/$id/backup'), headers: _headers, body: jsonEncode({'ultimoRespaldo': fecha.toIso8601String()})).timeout(kTimeout);
     if (res.statusCode != 200) throw Exception('Error al actualizar respaldo');
+  }
+
+  Future<List<Usuario>> fetchUsuarios() async {
+    final res = await http.get(Uri.parse('$kApiUrl/usuarios'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar usuarios');
+    return (jsonDecode(res.body) as List).map((e) => Usuario.fromMap(e)).toList();
+  }
+
+  Future<void> crearUsuario({
+    required String username,
+    required String email,
+    required String nombreCompleto,
+    required String rol,
+    required String password,
+  }) async {
+    final res = await http.post(
+      Uri.parse('$kApiUrl/usuarios'),
+      headers: _headers,
+      body: jsonEncode({'username': username, 'email': email, 'nombreCompleto': nombreCompleto, 'rol': rol, 'password': password}),
+    ).timeout(kTimeout);
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(jsonDecode(res.body)['detail'] ?? 'Error al crear usuario');
+  }
+
+  Future<void> actualizarUsuario({
+    required String username,
+    required String nombreCompleto,
+    required String email,
+    required String rol,
+    String? password,
+  }) async {
+    final body = <String, dynamic>{'nombreCompleto': nombreCompleto, 'email': email, 'rol': rol};
+    if (password != null) body['password'] = password;
+    final res = await http.put(
+      Uri.parse('$kApiUrl/usuarios/$username'),
+      headers: _headers,
+      body: jsonEncode(body),
+    ).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception(jsonDecode(res.body)['detail'] ?? 'Error al actualizar usuario');
+  }
+
+  Future<void> eliminarUsuario(String username) async {
+    final res = await http.delete(Uri.parse('$kApiUrl/usuarios/$username'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al eliminar usuario');
   }
 
   Future<List<ChatMessage>> fetchMensajes() async {

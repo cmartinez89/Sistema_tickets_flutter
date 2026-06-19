@@ -26,16 +26,46 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _mostrarOlvideContrasena() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Olvidaste tu contraseña?'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Contacta al administrador del sistema para restablecer tu contraseña.'),
+            SizedBox(height: 12),
+            Text('El administrador puede actualizar tu contraseña desde el Panel de Gestión de Usuarios.', style: TextStyle(color: Colors.blueGrey, fontSize: 13)),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
+
+    // Acepta "cmartinez" o "cmartinez@beta.com.mx" → normaliza al prefijo
+    String input = _userCtrl.text.trim().toLowerCase();
+    if (input.contains('@')) {
+      input = input.split('@').first;
+    }
 
     try {
       final response = await http.post(
         Uri.parse('${api_service.kApiUrl}/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'username': _userCtrl.text.trim().toLowerCase(),
+          'username': input,
           'password': _passCtrl.text,
         }),
       ).timeout(api_service.kTimeout);
@@ -107,18 +137,35 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 32),
                       TextFormField(
                         controller: _userCtrl,
-                        decoration: const InputDecoration(labelText: 'Usuario', border: OutlineInputBorder()),
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Usuario o correo',
+                          hintText: 'cmartinez o cmartinez@beta.com.mx',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _passCtrl,
                         obscureText: true,
-                        decoration: const InputDecoration(labelText: 'Contraseña', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(
+                          labelText: 'Contraseña',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.lock_outline_rounded),
+                        ),
                         onFieldSubmitted: (_) => _handleLogin(),
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                       ),
-                      const SizedBox(height: 24),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _mostrarOlvideContrasena,
+                          child: const Text('¿Olvidaste tu contraseña?'),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       SizedBox(
                         width: double.infinity,
                         height: 50,

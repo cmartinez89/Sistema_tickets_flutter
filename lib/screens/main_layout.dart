@@ -5,6 +5,7 @@ import '../models/session_model.dart';
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
 import '../models/chat_message_model.dart';
+import '../models/usuario_model.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/websocket_service.dart';
@@ -13,6 +14,7 @@ import 'tickets_screen.dart';
 import 'equipment_screen.dart';
 import 'backups_screen.dart';
 import 'chat_screen.dart';
+import 'users_screen.dart';
 import 'login_screen.dart';
 
 const String kWsUrl = 'ws://54.161.41.131:8000/ws';
@@ -33,6 +35,7 @@ class _MainLayoutState extends State<MainLayout> {
   List<Ticket> _tickets = [];
   List<Equipo> _inventario = [];
   List<ChatMessage> _mensajes = [];
+  List<Usuario> _usuarios = [];
   int _mensajesNoLeidos = 0;
   bool _cargandoInicial = true;
   String _notifPermiso = 'default';
@@ -47,6 +50,7 @@ class _MainLayoutState extends State<MainLayout> {
     _cargarDatos().then((_) {
       _ws.iniciar();
       _cargarMensajes();
+      _cargarUsuarios();
     });
     _actualizarEstadoNotif();
   }
@@ -89,6 +93,13 @@ class _MainLayoutState extends State<MainLayout> {
     } catch (_) {}
   }
 
+  Future<void> _cargarUsuarios() async {
+    try {
+      final lista = await _api.fetchUsuarios();
+      if (mounted) setState(() => _usuarios = lista);
+    } catch (_) {}
+  }
+
   // ── WebSocket ──────────────────────────────────────────────────────────────
 
   void _manejarMensajeWs(Map<String, dynamic> datos) {
@@ -107,6 +118,8 @@ class _MainLayoutState extends State<MainLayout> {
           msg.texto,
         );
       }
+    } else if (tipo == 'usuarios') {
+      _cargarUsuarios();
     } else {
       _cargarDatos(silencioso: true);
     }
@@ -192,7 +205,7 @@ class _MainLayoutState extends State<MainLayout> {
 
     final screens = [
       DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session, onNavigate: (i) => setState(() => _screenIndex = i)),
-      TicketsScreen(tickets: _tickets, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
+      TicketsScreen(tickets: _tickets, usuarios: _usuarios, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
       EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
       PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
       ChatScreen(
@@ -201,6 +214,12 @@ class _MainLayoutState extends State<MainLayout> {
         api: _api,
         onVolver: () => setState(() => _screenIndex = _screenAnterior),
       ),
+      if (widget.session.rol == 'Admin')
+        UsersScreen(
+          usuarios: _usuarios,
+          api: _api,
+          onRefresh: _cargarUsuarios,
+        ),
     ];
 
     return Scaffold(
@@ -247,10 +266,14 @@ class _MainLayoutState extends State<MainLayout> {
             _item(Icons.computer_rounded, 'Equipos / Responsivas', 2),
             _item(Icons.backup_rounded, 'Control de Respaldos', 3),
             _itemChat(),
+            if (widget.session.rol == 'Admin') ...[
+              const Divider(),
+              _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', 5),
+            ],
           ],
         ),
       ),
-      body: screens[_screenIndex],
+      body: _screenIndex < screens.length ? screens[_screenIndex] : screens[0],
     );
   }
 

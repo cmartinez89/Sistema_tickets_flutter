@@ -130,17 +130,34 @@ class MensajeRequest(BaseModel):
     nombreCompleto: str
     texto: str
 
+class UsuarioCreateRequest(BaseModel):
+    username: str
+    email: str
+    nombreCompleto: str
+    rol: str
+    password: str
+
+class UsuarioUpdateRequest(BaseModel):
+    nombreCompleto: Optional[str] = None
+    email: Optional[str] = None
+    rol: Optional[str] = None
+    password: Optional[str] = None
+
 # ============================================================================
 # AUTENTICACION
 # ============================================================================
 @app.post("/login")
 def login(req: LoginRequest):
+    # Acepta "cmartinez" o "cmartinez@beta.com.mx"
+    username = req.username.strip().lower()
+    if '@' in username:
+        username = username.split('@')[0]
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
             cursor.execute(
                 "SELECT username, nombre_completo, rol FROM usuarios WHERE username = %s AND password = %s",
-                (req.username, req.password)
+                (username, req.password)
             )
             user = cursor.fetchone()
             if user:
@@ -359,6 +376,81 @@ async def update_equipo_backup(equipo_id: str, req: EquipoBackupRequest):
     finally:
         connection.close()
     await manager.broadcast({"tipo": "equipos", "accion": "respaldo"})
+    return {"status": "success"}
+
+# ============================================================================
+# USUARIOS
+# ============================================================================
+@app.get("/usuarios")
+def get_usuarios():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT username, email, nombre_completo AS nombreCompleto, rol FROM usuarios ORDER BY nombre_completo ASC")
+            return cursor.fetchall()
+    finally:
+        connection.close()
+
+@app.post("/usuarios", status_code=201)
+async def create_usuario(req: UsuarioCreateRequest):
+    username = req.username.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="El username no puede estar vacío")
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT username FROM usuarios WHERE username = %s OR email = %s", (username, req.email.lower()))
+            if cursor.fetchone():
+                raise HTTPException(status_code=409, detail="El usuario o correo ya existe")
+            cursor.execute(
+                "INSERT INTO usuarios (username, email, nombre_completo, rol, password) VALUES (%s, %s, %s, %s, %s)",
+                (username, req.email.strip().lower(), req.nombreCompleto.strip(), req.rol, req.password)
+            )
+            connection.commit()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "usuarios", "accion": "nuevo"})
+    return {"username": username, "email": req.email, "nombreCompleto": req.nombreCompleto, "rol": req.rol}
+
+@app.put("/usuarios/{username}")
+async def update_usuario(username: str, req: UsuarioUpdateRequest):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            campos = []
+            valores = []
+            if req.nombreCompleto is not None:
+                campos.append("nombre_completo = %s"); valores.append(req.nombreCompleto.strip())
+            if req.email is not None:
+                campos.append("email = %s"); valores.append(req.email.strip().lower())
+            if req.rol is not None:
+                campos.append("rol = %s"); valores.append(req.rol)
+            if req.password is not None and req.password.strip():
+                campos.append("password = %s"); valores.append(req.password.strip())
+            if not campos:
+                raise HTTPException(status_code=400, detail="Sin campos a actualizar")
+            valores.append(username)
+            cursor.execute(f"UPDATE usuarios SET {', '.join(campos)} WHERE username = %s", valores)
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "usuarios", "accion": "actualizado"})
+    return {"status": "success"}
+
+@app.delete("/usuarios/{username}")
+async def delete_usuario(username: str):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM usuarios WHERE username = %s", (username,))
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "usuarios", "accion": "eliminado"})
     return {"status": "success"}
 
 # ============================================================================
