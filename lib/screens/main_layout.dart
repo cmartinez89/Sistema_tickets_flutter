@@ -29,6 +29,7 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _screenIndex = 0;
+  int _screenAnterior = 0;
   List<Ticket> _tickets = [];
   List<Equipo> _inventario = [];
   List<ChatMessage> _mensajes = [];
@@ -194,10 +195,18 @@ class _MainLayoutState extends State<MainLayout> {
       TicketsScreen(tickets: _tickets, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
       EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
       PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
-      ChatScreen(mensajes: _mensajes, session: widget.session, api: _api),
+      ChatScreen(
+        mensajes: _mensajes,
+        session: widget.session,
+        api: _api,
+        onVolver: () => setState(() => _screenIndex = _screenAnterior),
+      ),
     ];
 
     return Scaffold(
+      floatingActionButton: _screenIndex != 4
+          ? _buildFabChat()
+          : null,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
         title: Text(
@@ -245,6 +254,44 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
+  Widget _buildFabChat() {
+    final color = Theme.of(context).colorScheme.primary;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        FloatingActionButton(
+          heroTag: 'fab_chat',
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          tooltip: 'Chat Interno',
+          onPressed: () {
+            setState(() {
+              _screenAnterior = _screenIndex;
+              _screenIndex = 4;
+              _mensajesNoLeidos = 0;
+            });
+          },
+          child: const Icon(Icons.chat_rounded),
+        ),
+        if (_mensajesNoLeidos > 0)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              child: Text(
+                '$_mensajesNoLeidos',
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   ListTile _item(IconData icon, String label, int index) => ListTile(
         leading: Icon(icon),
         title: Text(label),
@@ -256,15 +303,32 @@ class _MainLayoutState extends State<MainLayout> {
       );
 
   ListTile _itemChat() => ListTile(
-        leading: Badge(
-          isLabelVisible: _mensajesNoLeidos > 0,
-          label: Text('$_mensajesNoLeidos'),
-          child: const Icon(Icons.chat_rounded),
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.chat_rounded),
+            if (_mensajesNoLeidos > 0)
+              Positioned(
+                right: -6,
+                top: -6,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Text(
+                    '$_mensajesNoLeidos',
+                    style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
         ),
         title: const Text('Chat Interno'),
         selected: _screenIndex == 4,
         onTap: () {
           setState(() {
+            _screenAnterior = _screenIndex;
             _screenIndex = 4;
             _mensajesNoLeidos = 0;
           });

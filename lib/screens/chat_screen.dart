@@ -7,12 +7,14 @@ class ChatScreen extends StatefulWidget {
   final List<ChatMessage> mensajes;
   final Session session;
   final ApiService api;
+  final VoidCallback? onVolver;
 
   const ChatScreen({
     super.key,
     required this.mensajes,
     required this.session,
     required this.api,
+    this.onVolver,
   });
 
   @override
@@ -85,10 +87,18 @@ class _ChatScreenState extends State<ChatScreen> {
           // Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
             color: Colors.white,
             child: Row(
               children: [
+                if (widget.onVolver != null)
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    onPressed: widget.onVolver,
+                    tooltip: 'Volver',
+                  )
+                else
+                  const SizedBox(width: 16),
                 CircleAvatar(
                   backgroundColor: primary.withValues(alpha: 0.12),
                   child: Icon(Icons.groups_rounded, color: primary, size: 20),
@@ -169,14 +179,24 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 _enviando
-                    ? const SizedBox(width: 44, height: 44, child: Padding(padding: EdgeInsets.all(10), child: CircularProgressIndicator(strokeWidth: 2)))
-                    : IconButton(
-                        onPressed: _enviar,
-                        icon: const Icon(Icons.send_rounded),
+                    ? SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: primary),
+                        ),
+                      )
+                    : Material(
                         color: primary,
-                        style: IconButton.styleFrom(
-                          backgroundColor: primary.withValues(alpha: 0.1),
-                          shape: const CircleBorder(),
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: _enviar,
+                          child: const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                          ),
                         ),
                       ),
               ],

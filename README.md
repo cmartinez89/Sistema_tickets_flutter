@@ -31,6 +31,14 @@ Sistema interno de gestión de soporte técnico, inventario de equipos y control
 - Estado de respaldos: Al día vs Atrasados
 - Últimos 5 tickets registrados (solo Admin)
 
+### Chat Interno en tiempo real
+- Mensajería entre técnicos y administrador, accesible desde cualquier pantalla
+- Burbujas estilo Messenger: mensajes propios a la derecha (color primario), ajenos a la izquierda
+- Avatar con inicial, nombre del emisor y hora en cada burbuja
+- Badge rojo con contador de mensajes no leídos en el menú y en el botón flotante
+- Botón flotante (FAB) de chat visible en toda la aplicación — toca y vuelves a donde estabas
+- Notificación push del navegador cuando llega un mensaje y no estás en el chat
+
 ### Notificaciones en tiempo real (WebSocket)
 - Conexión permanente al backend mediante WebSocket
 - La UI se actualiza automáticamente cuando cualquier usuario hace un cambio
@@ -38,6 +46,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos y control
   - Tickets nuevos asignados al usuario
   - Cambios de estado en tickets del usuario
   - Reasignaciones
+  - Mensajes de chat nuevos
 - Reconexión automática si se pierde la conexión
 
 ---
@@ -62,18 +71,20 @@ lib/
 ├── models/
 │   ├── session_model.dart
 │   ├── ticket_model.dart
-│   └── equipo_model.dart
+│   ├── equipo_model.dart
+│   └── chat_message_model.dart
 ├── services/
 │   ├── api_service.dart          ← HTTP REST (kApiUrl, kTimeout)
 │   ├── websocket_service.dart    ← WebSocket con reconexión automática
 │   └── notification_service.dart ← Web Notifications API
 └── screens/
     ├── login_screen.dart
-    ├── main_layout.dart          ← estado central, WS, detección de cambios
+    ├── main_layout.dart          ← estado central, WS, chat, FAB flotante
     ├── dashboard_screen.dart
     ├── tickets_screen.dart
     ├── equipment_screen.dart
     ├── backups_screen.dart
+    ├── chat_screen.dart          ← mensajería en tiempo real
     └── dialogo_nuevo_equipo.dart
 
 main_api.py                       ← backend FastAPI (subir a EC2)
@@ -152,6 +163,8 @@ ssh ubuntu@TU_IP_EC2 "sudo systemctl restart api-soporte"
 | `PUT` | `/equipos/:id/assign` | Asignar equipo a empleado |
 | `PUT` | `/equipos/:id/release` | Liberar equipo |
 | `PUT` | `/equipos/:id/backup` | Actualizar fecha de respaldo |
+| `GET` | `/mensajes` | Obtener historial de chat (últimos 200) |
+| `POST` | `/mensajes` | Enviar mensaje de chat (broadcast WS inmediato) |
 | `WS`  | `/ws` | Canal WebSocket para actualizaciones en tiempo real |
 
 ---
