@@ -22,7 +22,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
   final _descCtrl = TextEditingController();
   String _prioridad = 'Media';
   String _asignado = 'Sin Asignar';
-  final String _filtro = 'Activos';
+  String _filtro = 'Activos';
   bool _clearSession = false;
 
   final List<String> kTecnicos = const ['Sin Asignar', 'Carlos', 'Benjamin', 'Julio'];
@@ -36,8 +36,100 @@ class _TicketsScreenState extends State<TicketsScreen> {
     }
   }
 
+  void _abrirDialogoEditar(Ticket t) {
+    String nuevoEstado = t.estado;
+    String nuevoAsignado = t.asignadoA;
+    final causaCtrl = TextEditingController(text: t.causaRaiz ?? '');
+    final resolverCtrl = TextEditingController(text: t.comoSeResolvio ?? '');
+    final pruebasCtrl = TextEditingController(text: t.pruebasRealizadas ?? '');
+    final validadoCtrl = TextEditingController(text: t.validadoCon ?? '');
+    bool guardando = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDs) => AlertDialog(
+          title: Text('${t.id} — ${t.usuario}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 420,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Depto: ${t.departamento}  •  Prioridad: ${t.prioridad}', style: const TextStyle(color: Colors.blueGrey, fontSize: 13)),
+                  const SizedBox(height: 6),
+                  Text(t.descripcion),
+                  const Divider(height: 24),
+                  DropdownButtonFormField<String>(
+                    initialValue: nuevoEstado,
+                    decoration: const InputDecoration(labelText: 'Estado', border: OutlineInputBorder()),
+                    items: ['Pendiente', 'En Proceso', 'Resuelto'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                    onChanged: (v) => setDs(() => nuevoEstado = v!),
+                  ),
+                  if (widget.session.rol == 'Admin') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: nuevoAsignado,
+                      decoration: const InputDecoration(labelText: 'Técnico Responsable', border: OutlineInputBorder()),
+                      items: kTecnicos.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                      onChanged: (v) => setDs(() => nuevoAsignado = v!),
+                    ),
+                  ],
+                  if (nuevoEstado == 'Resuelto') ...[
+                    const Divider(height: 24),
+                    const Text('Detalle de resolución', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: causaCtrl, decoration: const InputDecoration(labelText: 'Causa raíz', border: OutlineInputBorder()), maxLines: 2),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: resolverCtrl, decoration: const InputDecoration(labelText: 'Cómo se resolvió', border: OutlineInputBorder()), maxLines: 2),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: pruebasCtrl, decoration: const InputDecoration(labelText: 'Pruebas realizadas', border: OutlineInputBorder()), maxLines: 2),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: validadoCtrl, decoration: const InputDecoration(labelText: 'Validado con', border: OutlineInputBorder())),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.primary, foregroundColor: Colors.white),
+              onPressed: guardando ? null : () async {
+                setDs(() => guardando = true);
+                try {
+                  if (nuevoEstado == 'Resuelto') {
+                    await widget.api.resolverTicket(t.id,
+                      causaRaiz: causaCtrl.text.trim(),
+                      comoSeResolvio: resolverCtrl.text.trim(),
+                      pruebasRealizadas: pruebasCtrl.text.trim(),
+                      validadoCon: validadoCtrl.text.trim(),
+                    );
+                  } else if (nuevoEstado != t.estado) {
+                    await widget.api.cambiarEstatusTicket(t.id, nuevoEstado);
+                  }
+                  if (nuevoAsignado != t.asignadoA) {
+                    await widget.api.reasignarTicket(t.id, nuevoAsignado);
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  widget.onRefresh();
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                } finally {
+                  if (ctx.mounted) setDs(() => guardando = false);
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _abrirDialogoNuevo() {
-    _usuarioCtrl.clear(); _deptoCtrl.clear(); _descCtrl.clear(); _prioridad = 'Media'; _asignado = 'Sin Asignar';
+    _usuarioCtrl.clear(); _deptoCtrl.clear(); _descCtrl.clear(); _prioridad = 'Media'; _asignado = 'Sin Asignar'; _clearSession = false;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -68,7 +160,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.primary, foregroundColor: Colors.white),
               onPressed: _clearSession ? null : () async {
                 if (!_formKey.currentState!.validate()) return;
                 setDs(() => _clearSession = true);
@@ -79,8 +171,8 @@ class _TicketsScreenState extends State<TicketsScreen> {
                   widget.onRefresh(); 
                 } catch (e) { 
                   if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); 
-                } finally { 
-                  setDs(() => _clearSession = false); 
+                } finally {
+                  if (ctx.mounted) setDs(() => _clearSession = false);
                 }
               },
               child: const Text('Registrar'),
@@ -96,6 +188,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
     List<Ticket> lista = widget.session.rol == 'Admin' ? widget.tickets : widget.tickets.where((t) => t.asignadoA.toLowerCase() == widget.session.username.toLowerCase()).toList();
     if (_filtro == 'Activos') lista = lista.where((t) => t.estado != 'Resuelto').toList();
     if (_filtro == 'Resueltos') lista = lista.where((t) => t.estado == 'Resuelto').toList();
+    // 'Todos' muestra sin filtro adicional
 
     return Scaffold(
       body: Padding(
@@ -106,7 +199,22 @@ class _TicketsScreenState extends State<TicketsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Consola Soporte (${lista.length})', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey)),
-                ElevatedButton.icon(onPressed: _abrirDialogoNuevo, icon: const Icon(Icons.add, size: 16), label: const Text('Nuevo')),
+                Row(
+                  children: [
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'Activos', label: Text('Activos')),
+                        ButtonSegment(value: 'Resueltos', label: Text('Resueltos')),
+                        ButtonSegment(value: 'Todos', label: Text('Todos')),
+                      ],
+                      selected: {_filtro},
+                      onSelectionChanged: (s) => setState(() => _filtro = s.first),
+                      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(onPressed: _abrirDialogoNuevo, icon: const Icon(Icons.add, size: 16), label: const Text('Nuevo')),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -117,8 +225,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
                   final t = lista[i];
                   return Card(
                     child: ListTile(
+                      onTap: () => _abrirDialogoEditar(t),
                       title: Text(t.descripcion),
-                      subtitle: Text('ID: ${t.id} • Asignado a: ${t.asignadoA}'),
+                      subtitle: Text('${t.id} • ${t.usuario} — ${t.departamento} • Asignado: ${t.asignadoA}'),
                       trailing: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(

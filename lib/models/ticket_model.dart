@@ -44,7 +44,7 @@ class Ticket {
   );
 
   Map<String, dynamic> toMap() => {
-    'id': id,
+    if (id.isNotEmpty) 'id': id,
     'usuario': usuario,
     'departamento': departamento,
     'descripcion': descripcion,

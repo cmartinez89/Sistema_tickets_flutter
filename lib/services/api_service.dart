@@ -29,7 +29,7 @@ class ApiService {
 
   Future<Ticket> crearTicket(Ticket ticket) async {
     final res = await http.post(Uri.parse('$kApiUrl/tickets'), headers: _headers, body: jsonEncode(ticket.toMap())).timeout(kTimeout);
-    if (res.statusCode != 200 && res.statusCode != 201) throw Exception('Error al crear ticket');
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception('Error ${res.statusCode}: ${res.body}');
     return Ticket.fromMap(jsonDecode(res.body));
   }
 

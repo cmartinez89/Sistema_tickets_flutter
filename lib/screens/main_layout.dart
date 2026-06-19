@@ -4,11 +4,14 @@ import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
+import '../services/websocket_service.dart';
 import 'dashboard_screen.dart';
 import 'tickets_screen.dart';
 import 'equipment_screen.dart';
 import 'backups_screen.dart';
 import 'login_screen.dart';
+
+const String kWsUrl = 'ws://54.161.41.131:8000/ws';
 
 class MainLayout extends StatefulWidget {
   final Session session;
@@ -21,59 +24,114 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  int _screenIndex = 1;
+  int _screenIndex = 0;
   List<Ticket> _tickets = [];
   List<Equipo> _inventario = [];
-  bool _cargando = true;
+  bool _cargandoInicial = true;
   late final ApiService _api;
+  late final WebSocketService _ws;
 
   @override
   void initState() {
     super.initState();
     _api = ApiService(token: widget.session.token);
-    _cargarDatos();
+    _ws = WebSocketService(
+      url: kWsUrl,
+      onMensaje: () => _cargarDatos(silencioso: true),
+    );
+    _cargarDatos().then((_) => _ws.iniciar());
   }
 
-  Future<void> _cargarDatos() async {
+  @override
+  void dispose() {
+    _ws.detener();
+    super.dispose();
+  }
+
+  Future<void> _cargarDatos({bool silencioso = false}) async {
     if (!mounted) return;
-    setState(() => _cargando = true);
     try {
       final results = await Future.wait([
         _api.fetchTickets(),
         _api.fetchEquipos(),
       ]);
       if (!mounted) return;
+
+      final nuevosTickets = results[0] as List<Ticket>;
+      final nuevosEquipos = results[1] as List<Equipo>;
+
+      if (silencioso) _detectarCambiosYNotificar(nuevosTickets);
+
       setState(() {
-        _tickets = results[0] as List<Ticket>;
-        _inventario = results[1] as List<Equipo>;
+        _tickets = nuevosTickets;
+        _inventario = nuevosEquipos;
+        _cargandoInicial = false;
       });
     } catch (e) {
       if (mounted) {
+        setState(() => _cargandoInicial = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar datos: $e'), backgroundColor: Colors.redAccent),
         );
       }
-    } finally {
-      if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  void _detectarCambiosYNotificar(List<Ticket> nuevosTickets) {
+    final idsConocidos = {for (final t in _tickets) t.id: t};
+
+    for (final t in nuevosTickets) {
+      final viejo = idsConocidos[t.id];
+
+      if (viejo == null) {
+        // Ticket nuevo
+        final esRelevante = widget.session.rol == 'Admin' ||
+            t.asignadoA.toLowerCase() == widget.session.username.toLowerCase();
+        if (esRelevante) {
+          NotificationService.lanzarAlertaLocal(
+            'Nuevo ticket ${t.id}',
+            '${t.usuario} · ${t.departamento}: ${t.descripcion}',
+          );
+        }
+      } else if (viejo.estado != t.estado) {
+        // Cambio de estado
+        final esRelevante = widget.session.rol == 'Admin' ||
+            t.asignadoA.toLowerCase() == widget.session.username.toLowerCase();
+        if (esRelevante) {
+          NotificationService.lanzarAlertaLocal(
+            '${t.id} — Estado actualizado',
+            '${viejo.estado} → ${t.estado}',
+          );
+        }
+      } else if (viejo.asignadoA != t.asignadoA) {
+        // Reasignación
+        if (t.asignadoA.toLowerCase() == widget.session.username.toLowerCase()) {
+          NotificationService.lanzarAlertaLocal(
+            'Ticket asignado: ${t.id}',
+            '${t.usuario} · ${t.departamento}: ${t.descripcion}',
+          );
+        }
+      }
     }
   }
 
   void _logout() {
+    _ws.detener();
     widget.notifService.detener();
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_cargando) {
+    if (_cargandoInicial) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final screens = [
-      DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session),
-      TicketsScreen(tickets: _tickets, session: widget.session, api: _api, onRefresh: _cargarDatos),
-      EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: _cargarDatos),
-      PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: _cargarDatos, session: widget.session),
+      DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session, onNavigate: (i) => setState(() => _screenIndex = i)),
+      TicketsScreen(tickets: _tickets, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
+      EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
+      PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
     ];
 
     return Scaffold(
@@ -85,7 +143,7 @@ class _MainLayoutState extends State<MainLayout> {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _cargarDatos, tooltip: 'Recargar'),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: () => _cargarDatos(silencioso: true), tooltip: 'Recargar'),
           IconButton(icon: const Icon(Icons.logout_rounded), onPressed: _logout, tooltip: 'Cerrar sesión'),
         ],
       ),
