@@ -4,6 +4,7 @@ import 'package:web/web.dart' as web;
 import '../models/session_model.dart';
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
+import '../models/chat_message_model.dart';
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
 import '../services/websocket_service.dart';
@@ -11,6 +12,7 @@ import 'dashboard_screen.dart';
 import 'tickets_screen.dart';
 import 'equipment_screen.dart';
 import 'backups_screen.dart';
+import 'chat_screen.dart';
 import 'login_screen.dart';
 
 const String kWsUrl = 'ws://54.161.41.131:8000/ws';
@@ -29,6 +31,8 @@ class _MainLayoutState extends State<MainLayout> {
   int _screenIndex = 0;
   List<Ticket> _tickets = [];
   List<Equipo> _inventario = [];
+  List<ChatMessage> _mensajes = [];
+  int _mensajesNoLeidos = 0;
   bool _cargandoInicial = true;
   String _notifPermiso = 'default';
   late final ApiService _api;
@@ -38,11 +42,11 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
     _api = ApiService(token: widget.session.token);
-    _ws = WebSocketService(
-      url: kWsUrl,
-      onMensaje: () => _cargarDatos(silencioso: true),
-    );
-    _cargarDatos().then((_) => _ws.iniciar());
+    _ws = WebSocketService(url: kWsUrl, onMensaje: _manejarMensajeWs);
+    _cargarDatos().then((_) {
+      _ws.iniciar();
+      _cargarMensajes();
+    });
     _actualizarEstadoNotif();
   }
 
@@ -52,20 +56,16 @@ class _MainLayoutState extends State<MainLayout> {
     super.dispose();
   }
 
+  // ── Datos principales ──────────────────────────────────────────────────────
+
   Future<void> _cargarDatos({bool silencioso = false}) async {
     if (!mounted) return;
     try {
-      final results = await Future.wait([
-        _api.fetchTickets(),
-        _api.fetchEquipos(),
-      ]);
+      final results = await Future.wait([_api.fetchTickets(), _api.fetchEquipos()]);
       if (!mounted) return;
-
       final nuevosTickets = results[0] as List<Ticket>;
       final nuevosEquipos = results[1] as List<Equipo>;
-
       if (silencioso) _detectarCambiosYNotificar(nuevosTickets);
-
       setState(() {
         _tickets = nuevosTickets;
         _inventario = nuevosEquipos;
@@ -81,48 +81,70 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
+  Future<void> _cargarMensajes() async {
+    try {
+      final msgs = await _api.fetchMensajes();
+      if (mounted) setState(() => _mensajes = msgs);
+    } catch (_) {}
+  }
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
+
+  void _manejarMensajeWs(Map<String, dynamic> datos) {
+    final tipo = datos['tipo'] as String? ?? '';
+    if (tipo == 'chat') {
+      final msg = ChatMessage.fromMap(datos);
+      // Evitar duplicados (el mismo cliente que envió ya lo tiene si no usamos optimistic)
+      if (_mensajes.any((m) => m.id == msg.id)) return;
+      setState(() {
+        _mensajes = [..._mensajes, msg];
+        if (_screenIndex != 4) _mensajesNoLeidos++;
+      });
+      if (_screenIndex != 4) {
+        NotificationService.lanzarAlertaLocal(
+          'Mensaje de ${msg.nombreCompleto}',
+          msg.texto,
+        );
+      }
+    } else {
+      _cargarDatos(silencioso: true);
+    }
+  }
+
+  // ── Notificaciones de tickets ──────────────────────────────────────────────
+
   void _detectarCambiosYNotificar(List<Ticket> nuevosTickets) {
     final idsConocidos = {for (final t in _tickets) t.id: t};
-
     for (final t in nuevosTickets) {
       final viejo = idsConocidos[t.id];
-
       if (viejo == null) {
-        // Ticket nuevo
         final esRelevante = widget.session.rol == 'Admin' ||
             t.asignadoA.toLowerCase() == widget.session.username.toLowerCase();
         if (esRelevante) {
-          NotificationService.lanzarAlertaLocal(
-            'Nuevo ticket ${t.id}',
-            '${t.usuario} · ${t.departamento}: ${t.descripcion}',
-          );
+          NotificationService.lanzarAlertaLocal('Nuevo ticket ${t.id}', '${t.usuario} · ${t.departamento}: ${t.descripcion}');
         }
       } else if (viejo.estado != t.estado) {
-        // Cambio de estado
         final esRelevante = widget.session.rol == 'Admin' ||
             t.asignadoA.toLowerCase() == widget.session.username.toLowerCase();
         if (esRelevante) {
-          NotificationService.lanzarAlertaLocal(
-            '${t.id} — Estado actualizado',
-            '${viejo.estado} → ${t.estado}',
-          );
+          NotificationService.lanzarAlertaLocal('${t.id} — Estado actualizado', '${viejo.estado} → ${t.estado}');
         }
-      } else if (viejo.asignadoA != t.asignadoA) {
-        // Reasignación
-        if (t.asignadoA.toLowerCase() == widget.session.username.toLowerCase()) {
-          NotificationService.lanzarAlertaLocal(
-            'Ticket asignado: ${t.id}',
-            '${t.usuario} · ${t.departamento}: ${t.descripcion}',
-          );
-        }
+      } else if (viejo.asignadoA != t.asignadoA &&
+          t.asignadoA.toLowerCase() == widget.session.username.toLowerCase()) {
+        NotificationService.lanzarAlertaLocal('Ticket asignado: ${t.id}', '${t.usuario} · ${t.departamento}: ${t.descripcion}');
       }
     }
   }
 
+  // ── Permisos de notificación ───────────────────────────────────────────────
+
   void _actualizarEstadoNotif() {
     try {
-      final permiso = web.Notification.permission == 'granted' ? 'granted'
-          : web.Notification.permission == 'denied' ? 'denied' : 'default';
+      final permiso = web.Notification.permission == 'granted'
+          ? 'granted'
+          : web.Notification.permission == 'denied'
+              ? 'denied'
+              : 'default';
       if (mounted) setState(() => _notifPermiso = permiso);
     } catch (_) {}
   }
@@ -151,11 +173,15 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
+  // ── Sesión ─────────────────────────────────────────────────────────────────
+
   void _logout() {
     _ws.detener();
     widget.notifService.detener();
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +194,7 @@ class _MainLayoutState extends State<MainLayout> {
       TicketsScreen(tickets: _tickets, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
       EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
       PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
+      ChatScreen(mensajes: _mensajes, session: widget.session, api: _api),
     ];
 
     return Scaffold(
@@ -210,6 +237,7 @@ class _MainLayoutState extends State<MainLayout> {
             _item(Icons.confirmation_number_rounded, 'Tickets / Asignaciones', 1),
             _item(Icons.computer_rounded, 'Equipos / Responsivas', 2),
             _item(Icons.backup_rounded, 'Control de Respaldos', 3),
+            _itemChat(),
           ],
         ),
       ),
@@ -218,12 +246,29 @@ class _MainLayoutState extends State<MainLayout> {
   }
 
   ListTile _item(IconData icon, String label, int index) => ListTile(
-    leading: Icon(icon),
-    title: Text(label),
-    selected: _screenIndex == index,
-    onTap: () {
-      setState(() => _screenIndex = index);
-      Navigator.pop(context);
-    },
-  );
+        leading: Icon(icon),
+        title: Text(label),
+        selected: _screenIndex == index,
+        onTap: () {
+          setState(() => _screenIndex = index);
+          Navigator.pop(context);
+        },
+      );
+
+  ListTile _itemChat() => ListTile(
+        leading: Badge(
+          isLabelVisible: _mensajesNoLeidos > 0,
+          label: Text('$_mensajesNoLeidos'),
+          child: const Icon(Icons.chat_rounded),
+        ),
+        title: const Text('Chat Interno'),
+        selected: _screenIndex == 4,
+        onTap: () {
+          setState(() {
+            _screenIndex = 4;
+            _mensajesNoLeidos = 0;
+          });
+          Navigator.pop(context);
+        },
+      );
 }

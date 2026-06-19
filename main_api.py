@@ -125,6 +125,11 @@ class EquipoLiberarRequest(BaseModel):
 class EquipoBackupRequest(BaseModel):
     ultimoRespaldo: str
 
+class MensajeRequest(BaseModel):
+    deUsuario: str
+    nombreCompleto: str
+    texto: str
+
 # ============================================================================
 # AUTENTICACION
 # ============================================================================
@@ -355,3 +360,52 @@ async def update_equipo_backup(equipo_id: str, req: EquipoBackupRequest):
         connection.close()
     await manager.broadcast({"tipo": "equipos", "accion": "respaldo"})
     return {"status": "success"}
+
+# ============================================================================
+# CHAT
+# ============================================================================
+@app.get("/mensajes")
+def get_mensajes():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, de_usuario AS deUsuario, nombre_completo AS nombreCompleto,
+                       texto, fecha
+                FROM mensajes ORDER BY fecha ASC LIMIT 200
+            """)
+            mensajes = cursor.fetchall()
+            for m in mensajes:
+                m['id'] = str(m['id'])
+                if isinstance(m['fecha'], datetime):
+                    m['fecha'] = m['fecha'].isoformat()
+            return mensajes
+    finally:
+        connection.close()
+
+@app.post("/mensajes")
+async def create_mensaje(req: MensajeRequest):
+    if not req.texto.strip():
+        raise HTTPException(status_code=400, detail="El texto no puede estar vacío")
+    ahora = datetime.now()
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO mensajes (de_usuario, nombre_completo, texto, fecha) VALUES (%s, %s, %s, %s)",
+                (req.deUsuario, req.nombreCompleto, req.texto.strip(), ahora)
+            )
+            connection.commit()
+            nuevo_id = cursor.lastrowid
+    finally:
+        connection.close()
+    payload = {
+        "tipo": "chat",
+        "id": str(nuevo_id),
+        "deUsuario": req.deUsuario,
+        "nombreCompleto": req.nombreCompleto,
+        "texto": req.texto.strip(),
+        "fecha": ahora.isoformat(),
+    }
+    await manager.broadcast(payload)
+    return payload

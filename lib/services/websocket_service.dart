@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
 import 'package:web/web.dart' as web;
 
+typedef OnWsMensaje = void Function(Map<String, dynamic> datos);
+
 class WebSocketService {
   final String url;
-  final VoidCallback onMensaje;
+  final OnWsMensaje onMensaje;
 
   web.WebSocket? _socket;
   Timer? _reconectarTimer;
@@ -27,8 +30,14 @@ class WebSocketService {
         debugPrint('[WS] Conectado al servidor');
       }).toJS;
 
-      _socket!.onmessage = ((web.MessageEvent _) {
-        onMensaje();
+      _socket!.onmessage = ((web.MessageEvent e) {
+        try {
+          final texto = (e.data as JSString).toDart;
+          final datos = jsonDecode(texto) as Map<String, dynamic>;
+          onMensaje(datos);
+        } catch (_) {
+          onMensaje({});
+        }
       }).toJS;
 
       _socket!.onclose = ((web.CloseEvent _) {

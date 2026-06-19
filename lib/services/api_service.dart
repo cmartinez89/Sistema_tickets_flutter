@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
+import '../models/chat_message_model.dart';
 
 const String kApiUrl = 'http://54.161.41.131:8000';
 const Duration kTimeout = Duration(seconds: 15);
@@ -73,5 +74,20 @@ class ApiService {
   Future<void> actualizarRespaldo(String id, DateTime fecha) async {
     final res = await http.put(Uri.parse('$kApiUrl/equipos/$id/backup'), headers: _headers, body: jsonEncode({'ultimoRespaldo': fecha.toIso8601String()})).timeout(kTimeout);
     if (res.statusCode != 200) throw Exception('Error al actualizar respaldo');
+  }
+
+  Future<List<ChatMessage>> fetchMensajes() async {
+    final res = await http.get(Uri.parse('$kApiUrl/mensajes'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar mensajes');
+    return (jsonDecode(res.body) as List).map((e) => ChatMessage.fromMap(e)).toList();
+  }
+
+  Future<void> enviarMensaje(String deUsuario, String nombreCompleto, String texto) async {
+    final res = await http.post(
+      Uri.parse('$kApiUrl/mensajes'),
+      headers: _headers,
+      body: jsonEncode({'deUsuario': deUsuario, 'nombreCompleto': nombreCompleto, 'texto': texto}),
+    ).timeout(kTimeout);
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception('Error al enviar mensaje');
   }
 }
