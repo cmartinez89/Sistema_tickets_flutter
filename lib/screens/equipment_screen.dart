@@ -1,9 +1,8 @@
-import 'dart:js_interop';
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
 import '../models/equipo_model.dart';
 import '../models/session_model.dart';
 import '../services/api_service.dart';
+import '../utils/print_helper.dart';
 import 'dialogo_nuevo_equipo.dart';
 
 class EquipmentScreen extends StatefulWidget {
@@ -370,11 +369,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 </body>
 </html>''';
 
-    final ventana = web.window.open('', '_blank', 'width=850,height=700,scrollbars=yes');
-    if (ventana != null) {
-      ventana.document.write(html.toJS);
-      ventana.document.close();
-    }
+    printHtml(html);
   }
 
   Widget _statusChip(String label, Color color) {

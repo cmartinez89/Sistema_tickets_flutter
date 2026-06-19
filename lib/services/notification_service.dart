@@ -1,6 +1,5 @@
-import 'dart:js_interop';
 import 'package:flutter/foundation.dart';
-import 'package:web/web.dart' as web;
+import '../utils/notif_helper.dart';
 
 class NotificationService {
   final String username;
@@ -15,14 +14,7 @@ class NotificationService {
 
   static Future<void> solicitarPermiso() async {
     try {
-      final queryOptions = {'name': 'notifications'}.jsify();
-      final permissionStatus = await web.window.navigator.permissions.query(
-        queryOptions! as JSObject,
-      ).toDart;
-      if (permissionStatus.state == 'prompt') {
-        final resultado = await web.Notification.requestPermission().toDart;
-        debugPrint('[Notificaciones] Permiso: $resultado');
-      }
+      await requestNotifPermission();
     } catch (e) {
       debugPrint('[Notificaciones] No soportado: $e');
     }
@@ -38,12 +30,7 @@ class NotificationService {
 
   static void lanzarAlertaLocal(String titulo, String cuerpo) {
     try {
-      if (web.Notification.permission == 'granted') {
-        web.Notification(
-          titulo,
-          web.NotificationOptions(body: cuerpo, icon: '/favicon.png'),
-        );
-      }
+      showNotification(titulo, cuerpo);
     } catch (_) {}
   }
 }

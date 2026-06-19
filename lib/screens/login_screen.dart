@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
           rol: data['rol'],
           token: data['token'] ?? '',
         );
-        session.guardar();
+        await session.guardar();
 
         await NotificationService.solicitarPermiso();
         final notifService = NotificationService(

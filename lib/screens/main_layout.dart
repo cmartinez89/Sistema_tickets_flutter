@@ -1,6 +1,5 @@
-import 'dart:js_interop';
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
+import '../utils/notif_helper.dart';
 import '../models/session_model.dart';
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
@@ -155,25 +154,21 @@ class _MainLayoutState extends State<MainLayout> {
 
   void _actualizarEstadoNotif() {
     try {
-      final permiso = web.Notification.permission == 'granted'
-          ? 'granted'
-          : web.Notification.permission == 'denied'
-              ? 'denied'
-              : 'default';
-      if (mounted) setState(() => _notifPermiso = permiso);
+      final permiso = notifPermission;
+      final estado = permiso == 'granted' ? 'granted' : permiso == 'denied' ? 'denied' : 'default';
+      if (mounted) setState(() => _notifPermiso = estado);
     } catch (_) {}
   }
 
   Future<void> _pedirPermisoNotificaciones() async {
     try {
-      final jsResultado = await web.Notification.requestPermission().toDart;
-      final resultado = jsResultado.toDart;
+      final resultado = await requestNotifPermission();
       if (mounted) setState(() => _notifPermiso = resultado);
       if (resultado == 'granted' && mounted) {
         NotificationService.lanzarAlertaLocal('Notificaciones activadas', 'Recibirás alertas de tickets y cambios.');
       } else if (resultado == 'denied' && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Notificaciones bloqueadas. Habilítalas en la configuración del navegador.'),
+          content: Text('Notificaciones bloqueadas. Habilítalas en la configuración.'),
           backgroundColor: Colors.redAccent,
           duration: Duration(seconds: 4),
         ));
@@ -181,7 +176,7 @@ class _MainLayoutState extends State<MainLayout> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Las notificaciones requieren HTTPS. Próximamente disponibles en móvil.'),
+          content: Text('Las notificaciones no están disponibles en esta plataforma.'),
           duration: Duration(seconds: 4),
         ));
       }
@@ -190,11 +185,11 @@ class _MainLayoutState extends State<MainLayout> {
 
   // ── Sesión ─────────────────────────────────────────────────────────────────
 
-  void _logout() {
+  Future<void> _logout() async {
     _ws.detener();
     widget.notifService.detener();
-    Session.limpiar();
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+    await Session.limpiar();
+    if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────

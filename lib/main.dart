@@ -45,7 +45,7 @@ class _SplashRouterState extends State<_SplashRouter> {
   }
 
   Future<void> _resolver() async {
-    final session = Session.restaurar();
+    final session = await Session.restaurar();
     if (session != null && mounted) {
       await NotificationService.solicitarPermiso();
       final notifService = NotificationService(

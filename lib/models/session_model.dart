@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:web/web.dart' as web;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class Session {
   final String username;
@@ -15,10 +15,11 @@ class Session {
   });
 
   static const _kKey = 'soporte_beta_session';
-  static const _kTtlMs = 7 * 24 * 60 * 60 * 1000; // 7 días en ms
+  static const _kTtlMs = 7 * 24 * 60 * 60 * 1000;
 
-  void guardar() {
-    web.window.localStorage.setItem(
+  Future<void> guardar() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
       _kKey,
       jsonEncode({
         'username': username,
@@ -30,14 +31,15 @@ class Session {
     );
   }
 
-  static Session? restaurar() {
+  static Future<Session?> restaurar() async {
     try {
-      final raw = web.window.localStorage.getItem(_kKey);
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kKey);
       if (raw == null || raw.isEmpty) return null;
       final data = jsonDecode(raw) as Map<String, dynamic>;
       final ts = (data['ts'] as num?)?.toInt() ?? 0;
       if (DateTime.now().millisecondsSinceEpoch - ts > _kTtlMs) {
-        limpiar();
+        await limpiar();
         return null;
       }
       return Session(
@@ -51,9 +53,10 @@ class Session {
     }
   }
 
-  static void limpiar() {
+  static Future<void> limpiar() async {
     try {
-      web.window.localStorage.removeItem(_kKey);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kKey);
     } catch (_) {}
   }
 }

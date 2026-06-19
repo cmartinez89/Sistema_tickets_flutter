@@ -1,32 +1,21 @@
-import 'dart:async';
-import 'dart:js_interop';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
+import 'package:image_picker/image_picker.dart';
 import '../models/ticket_model.dart';
 import '../models/session_model.dart';
 import '../models/usuario_model.dart';
 import '../services/api_service.dart';
 
 Future<String?> _pickImageBase64() async {
-  final completer = Completer<String?>();
-  final input = web.document.createElement('input') as web.HTMLInputElement;
-  input.type = 'file';
-  input.accept = 'image/*';
-  input.onchange = ((web.Event _) {
-    final files = input.files;
-    if (files == null || files.length == 0) {
-      completer.complete(null);
-      return;
-    }
-    final file = files.item(0)!;
-    final reader = web.FileReader();
-    reader.onload = ((web.ProgressEvent _) {
-      completer.complete(reader.result?.toString());
-    }).toJS;
-    reader.readAsDataURL(file);
-  }).toJS;
-  input.click();
-  return completer.future;
+  try {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80, maxWidth: 1024);
+    if (picked == null) return null;
+    final bytes = await picked.readAsBytes();
+    return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+  } catch (_) {
+    return null;
+  }
 }
 
 class TicketsScreen extends StatefulWidget {
