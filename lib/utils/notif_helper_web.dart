@@ -8,6 +8,8 @@ Future<String> requestNotifPermission() async {
   return result.toDart;
 }
 
+Future<void> initNotifHelperIfNeeded() async {}
+
 void showNotification(String title, String body) {
   if (web.Notification.permission == 'granted') {
     web.Notification(

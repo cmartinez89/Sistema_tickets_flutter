@@ -152,8 +152,9 @@ class _MainLayoutState extends State<MainLayout> {
 
   // ── Permisos de notificación ───────────────────────────────────────────────
 
-  void _actualizarEstadoNotif() {
+  void _actualizarEstadoNotif() async {
     try {
+      await initNotifHelperIfNeeded();
       final permiso = notifPermission;
       final estado = permiso == 'granted' ? 'granted' : permiso == 'denied' ? 'denied' : 'default';
       if (mounted) setState(() => _notifPermiso = estado);
