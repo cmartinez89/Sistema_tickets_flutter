@@ -1,4 +1,6 @@
+import 'dart:js_interop';
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 import '../models/session_model.dart';
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
@@ -28,6 +30,7 @@ class _MainLayoutState extends State<MainLayout> {
   List<Ticket> _tickets = [];
   List<Equipo> _inventario = [];
   bool _cargandoInicial = true;
+  String _notifPermiso = 'default';
   late final ApiService _api;
   late final WebSocketService _ws;
 
@@ -40,6 +43,7 @@ class _MainLayoutState extends State<MainLayout> {
       onMensaje: () => _cargarDatos(silencioso: true),
     );
     _cargarDatos().then((_) => _ws.iniciar());
+    _actualizarEstadoNotif();
   }
 
   @override
@@ -115,6 +119,38 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
+  void _actualizarEstadoNotif() {
+    try {
+      final permiso = web.Notification.permission == 'granted' ? 'granted'
+          : web.Notification.permission == 'denied' ? 'denied' : 'default';
+      if (mounted) setState(() => _notifPermiso = permiso);
+    } catch (_) {}
+  }
+
+  Future<void> _pedirPermisoNotificaciones() async {
+    try {
+      final jsResultado = await web.Notification.requestPermission().toDart;
+      final resultado = jsResultado.toDart;
+      if (mounted) setState(() => _notifPermiso = resultado);
+      if (resultado == 'granted' && mounted) {
+        NotificationService.lanzarAlertaLocal('Notificaciones activadas', 'Recibirás alertas de tickets y cambios.');
+      } else if (resultado == 'denied' && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Notificaciones bloqueadas. Habilítalas en la configuración del navegador.'),
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 4),
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Las notificaciones requieren HTTPS. Próximamente disponibles en móvil.'),
+          duration: Duration(seconds: 4),
+        ));
+      }
+    }
+  }
+
   void _logout() {
     _ws.detener();
     widget.notifService.detener();
@@ -143,6 +179,12 @@ class _MainLayoutState extends State<MainLayout> {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          IconButton(
+            icon: Icon(_notifPermiso == 'granted' ? Icons.notifications_active : Icons.notifications_off),
+            tooltip: _notifPermiso == 'granted' ? 'Notificaciones activas' : 'Activar notificaciones',
+            color: _notifPermiso == 'granted' ? Colors.greenAccent : Colors.white60,
+            onPressed: _notifPermiso == 'granted' ? null : _pedirPermisoNotificaciones,
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: () => _cargarDatos(silencioso: true), tooltip: 'Recargar'),
           IconButton(icon: const Icon(Icons.logout_rounded), onPressed: _logout, tooltip: 'Cerrar sesión'),
         ],
