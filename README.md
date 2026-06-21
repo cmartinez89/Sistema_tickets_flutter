@@ -148,7 +148,27 @@ flutter pub get              # instalar dependencias
 flutter run -d chrome        # desarrollo en Chrome
 flutter build web            # build de producción web (PWA)
 flutter build apk --release  # build APK Android
+flutter run -d <iphone_id>   # instalar en iPhone (requiere Xcode + CocoaPods)
 flutter analyze              # análisis estático
+```
+
+## Despliegue
+
+```bash
+# Web → EC2
+rsync -avz --delete -e "ssh -i llave-aws-beta.pem" build/web/ ubuntu@54.161.41.131:/var/www/soporte/
+
+# Android → Samsung (USB debug)
+flutter build apk --debug
+adb install -r build/app/outputs/flutter-apk/app-debug.apk
+
+# iOS → iPhone (requiere CocoaPods instalado)
+cd ios && pod install && cd ..
+flutter run --release -d <device_id>
+
+# Backend API (en EC2)
+# kill $(lsof -t -i:8000)
+# source venv/bin/activate && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > api.log 2>&1 &
 ```
 
 ---
