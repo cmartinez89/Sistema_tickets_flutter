@@ -68,6 +68,11 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - **Áreas/Departamentos**: dar de alta, editar y eliminar
 - **Tipos de equipo**: dar de alta, editar y eliminar (Celular, Bastón, Radio, Tablet, Laptop, Desktop, Servidor)
 
+### Identidad visual
+- Colores corporativos Beta Systems: navy `#1A2B72`, rojo `#DC0026` y azul `#4E9FE0`
+- Logo Beta como ícono de la app (web favicon, Android launcher y round icons)
+- Pantalla de login rediseñada con logo, tipografía y botón en color corporativo
+
 ### Sesión persistente
 - Sesión guardada en `localStorage` con TTL de 7 días
 - Cierre de sesión explícito limpia la sesión de inmediato

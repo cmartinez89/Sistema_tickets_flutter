@@ -116,26 +116,46 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const navy = Color(0xFF1A2B72);
+    const red = Color(0xFFDC0026);
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: const Color(0xFFF0F2F8),
       body: Center(
         child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 400),
-                padding: const EdgeInsets.all(32.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      Icon(Icons.cloud_sync_rounded, size: 64, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(height: 16),
-                      const Text('Soporte Beta', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 32),
+            child: Column(
+              children: [
+                // Header con logo fuera de la card
+                Image.asset('assets/logo.png', height: 80),
+                const SizedBox(height: 12),
+                const Text(
+                  'Beta Systems',
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: navy, letterSpacing: 0.5),
+                ),
+                const Text(
+                  'Sistema de Soporte TI',
+                  style: TextStyle(fontSize: 13, color: Colors.blueGrey),
+                ),
+                const SizedBox(height: 28),
+                Card(
+                  elevation: 4,
+                  shadowColor: Colors.black26,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    padding: const EdgeInsets.fromLTRB(32, 28, 32, 28),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Iniciar sesión',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: navy)),
+                          const SizedBox(height: 4),
+                          const Text('Ingresa tus credenciales para continuar',
+                              style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                          const SizedBox(height: 24),
                       TextFormField(
                         controller: _userCtrl,
                         keyboardType: TextInputType.emailAddress,
@@ -173,16 +193,19 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: ElevatedButton(
                           onPressed: _loading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            backgroundColor: red,
                             foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: _loading ? const CircularProgressIndicator(color: Colors.white) : const Text('Ingresar'),
+                          child: _loading ? const CircularProgressIndicator(color: Colors.white) : const Text('Ingresar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         ),
                       ),
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
