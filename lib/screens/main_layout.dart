@@ -30,7 +30,7 @@ class MainLayout extends StatefulWidget {
   State<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   int _screenIndex = 0;
   int _screenAnterior = 0;
   List<Ticket> _tickets = [];
@@ -55,6 +55,15 @@ class _MainLayoutState extends State<MainLayout> {
     });
     _actualizarEstadoNotif();
     _registrarFcmToken();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _ws.iniciar();
+      _cargarDatos(silencioso: true);
+    }
   }
 
   Future<void> _registrarFcmToken() async {
@@ -68,6 +77,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _ws.detener();
     super.dispose();
   }

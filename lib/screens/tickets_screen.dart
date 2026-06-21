@@ -41,7 +41,6 @@ class TicketsScreen extends StatefulWidget {
 class _TicketsScreenState extends State<TicketsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _usuarioCtrl = TextEditingController();
-  final _deptoCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   String _prioridad = 'Media';
   String _asignado = 'Sin Asignar';
@@ -487,7 +486,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
   void _abrirDialogoNuevo() {
     _usuarioCtrl.clear();
-    _deptoCtrl.clear();
     _descCtrl.clear();
     _prioridad = 'Media';
     _asignado = 'Sin Asignar';
@@ -513,17 +511,6 @@ class _TicketsScreenState extends State<TicketsScreen> {
                       controller: _usuarioCtrl,
                       decoration: const InputDecoration(
                           labelText: 'Usuario Afectado',
-                          border: OutlineInputBorder()),
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty)
-                              ? 'Requerido'
-                              : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _deptoCtrl,
-                      decoration: const InputDecoration(
-                          labelText: 'Departamento',
                           border: OutlineInputBorder()),
                       validator: (v) =>
                           (v == null || v.trim().isEmpty)
@@ -641,7 +628,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                       final nuevo = Ticket(
                         id: '',
                         usuario: _usuarioCtrl.text.trim(),
-                        departamento: _deptoCtrl.text.trim(),
+                        departamento: _nuevaArea ?? '',
                         descripcion: _descCtrl.text.trim(),
                         prioridad: _prioridad,
                         estado: 'Pendiente',

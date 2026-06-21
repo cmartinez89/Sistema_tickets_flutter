@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../utils/notif_helper.dart';
+
+const _batteryChannel = MethodChannel('com.betasystems.soporte/battery');
 
 class NotificationService {
   final String username;
@@ -17,6 +20,11 @@ class NotificationService {
       await requestNotifPermission();
     } catch (e) {
       debugPrint('[Notificaciones] No soportado: $e');
+    }
+    if (!kIsWeb) {
+      try {
+        await _batteryChannel.invokeMethod('requestBatteryOptimizationExemption');
+      } catch (_) {}
     }
   }
 

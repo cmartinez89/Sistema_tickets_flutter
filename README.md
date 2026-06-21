@@ -17,6 +17,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - **Filtros** por estado (Activos/Resueltos/Todos), área y prioridad
 - Chip de prioridad visible en cada tarjeta de ticket
 - **Auto-asignación**: técnicos se asignan automáticamente al crear tickets; Admin puede asignar libremente o dejar sin asignar
+- El campo Departamento se elimina del formulario — se usa el Área seleccionada como departamento automáticamente
 - Vista diferenciada por rol (Admin ve todos; Técnico ve solo los suyos)
 
 ### Chat Interno
@@ -65,6 +66,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 ### Sesión persistente
 - Sesión guardada en `localStorage` con TTL de 7 días
 - Cierre de sesión explícito limpia la sesión de inmediato
+- Al retomar la app desde background, el WebSocket se reconecta y los tickets se actualizan automáticamente
 
 ### Notificaciones en tiempo real
 - WebSocket permanente con reconexión automática
@@ -76,6 +78,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - El técnico recibe notificación push cuando se le asigna un ticket nuevo o se le reasigna uno existente
 - Las notificaciones llegan aunque la app esté en segundo plano o cerrada
 - Canales de alta prioridad configurados en Android (vibración + sonido)
+- Al primer inicio solicita exención de optimización de batería (necesario en Samsung para notificaciones en background)
 
 ---
 
