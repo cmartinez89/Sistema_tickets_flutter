@@ -103,7 +103,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                     icon: const Icon(Icons.add_to_photos_rounded, size: 16),
                     label: const Text('Alta Equipo'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00695C),
+                      backgroundColor: const Color(0xFF1A2B72),
                       foregroundColor: Colors.white,
                     ),
                   ),

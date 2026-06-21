@@ -81,11 +81,11 @@ class DashboardScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 32),
 
-                _sectionHeader('Inventario de Equipos', Icons.computer_rounded, Colors.teal),
+                _sectionHeader('Inventario de Equipos', Icons.computer_rounded, const Color(0xFF1A2B72)),
                 const SizedBox(height: 14),
                 _cardGrid(col: col, cardHeight: cardHeight, children: [
                   _cardDonut(titulo: 'Asignados', numero: '$asignados', subtitulo: 'de $totalEquipos equipos', progreso: totalEquipos > 0 ? asignados / totalEquipos : 0, color: Colors.indigo.shade600, icono: Icons.person_rounded, narrow: narrow, onTap: () => onNavigate(2)),
-                  _cardDonut(titulo: 'Disponibles', numero: '$disponibles', subtitulo: 'en almacén', progreso: totalEquipos > 0 ? disponibles / totalEquipos : 0, color: Colors.teal.shade600, icono: Icons.inventory_2_rounded, narrow: narrow, onTap: () => onNavigate(2)),
+                  _cardDonut(titulo: 'Disponibles', numero: '$disponibles', subtitulo: 'en almacén', progreso: totalEquipos > 0 ? disponibles / totalEquipos : 0, color: Colors.blue.shade700, icono: Icons.inventory_2_rounded, narrow: narrow, onTap: () => onNavigate(2)),
                   _cardStat(titulo: 'Valor del Inventario', numero: '\$${_formatMiles(valorTotal)}', subtitulo: 'MXN depreciado', color: Colors.blueGrey.shade700, icono: Icons.account_balance_wallet_rounded, narrow: narrow, onTap: () => onNavigate(2)),
                   _cardStat(titulo: 'Total de Equipos', numero: '$totalEquipos', subtitulo: 'registrados', color: Colors.blue.shade700, icono: Icons.devices_rounded, narrow: narrow, onTap: () => onNavigate(2)),
                 ]),

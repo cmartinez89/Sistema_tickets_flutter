@@ -9,7 +9,7 @@ import '../services/api_service.dart';
 
 const _kPaletaColores = [
   Color(0xFF1976D2),
-  Color(0xFF388E3C),
+  Color(0xFF5C6BC0),
   Color(0xFFF57C00),
   Color(0xFF7B1FA2),
   Color(0xFFD32F2F),
@@ -17,7 +17,7 @@ const _kPaletaColores = [
   Color(0xFF5D4037),
   Color(0xFF455A64),
   Color(0xFFE91E63),
-  Color(0xFF00796B),
+  Color(0xFF8D6E63),
   Color(0xFF6A1B9A),
   Color(0xFF1565C0),
 ];

@@ -38,7 +38,7 @@ void abrirDialogoNuevoEquipo({
       builder: (ctx, setDs) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.computer_rounded, color: Color(0xFF00695C)),
+            Icon(Icons.computer_rounded, color: Color(0xFF1A2B72)),
             SizedBox(width: 8),
             Text('Dar de Alta Equipo Nuevo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
@@ -171,14 +171,14 @@ void abrirDialogoNuevoEquipo({
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.teal.shade50, borderRadius: BorderRadius.circular(8)),
+                    decoration: BoxDecoration(color: const Color(0xFFE8EAF6), borderRadius: BorderRadius.circular(8)),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, size: 14, color: Colors.teal.shade700),
+                        const Icon(Icons.info_outline, size: 14, color: Color(0xFF1A2B72)),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text('El folio de activo se generará automáticamente.',
-                              style: TextStyle(fontSize: 11, color: Colors.teal.shade700)),
+                              style: TextStyle(fontSize: 11, color: Color(0xFF1A2B72))),
                         ),
                       ],
                     ),
@@ -191,7 +191,7 @@ void abrirDialogoNuevoEquipo({
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00695C), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
             onPressed: guardando
                 ? null
                 : () async {

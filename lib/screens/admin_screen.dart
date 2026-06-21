@@ -41,7 +41,7 @@ class AdminScreen extends StatelessWidget {
             _CatalogoManager(
               titulo: 'Áreas / Departamentos',
               icono: Icons.business_rounded,
-              color: Colors.teal,
+              color: const Color(0xFF1A2B72),
               onFetch: api.fetchAreas,
               onCreate: (nombre) => api.crearArea(nombre),
               onUpdate: (id, nombre) => api.actualizarArea(id, nombre),

@@ -122,7 +122,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       builder: (ctx) => AlertDialog(
         title: const Row(
           children: [
-            Icon(Icons.person_add_alt_1_rounded, color: Colors.teal),
+            Icon(Icons.person_add_alt_1_rounded, color: Color(0xFF1A2B72)),
             SizedBox(width: 8),
             Text('Asignar Activo', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
@@ -161,7 +161,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
             onPressed: () async {
               if (!_formKey.currentState!.validate()) return;
               Navigator.pop(ctx);
@@ -432,7 +432,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     ),
                     icon: const Icon(Icons.computer_rounded, size: 16),
                     label: const Text('Alta Equipo'),
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00695C), foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
                   ),
               ],
             ),
@@ -514,7 +514,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                           statusColor = Colors.indigo.shade700;
                           statusLabel = 'Asignado';
                         } else {
-                          statusColor = Colors.teal.shade700;
+                          statusColor = Colors.blue.shade700;
                           statusLabel = 'Disponible';
                         }
 
@@ -589,7 +589,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                           if (!vendido && !asignado)
                                             ElevatedButton.icon(
                                               style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.teal.shade50, foregroundColor: Colors.teal.shade800),
+                                                  backgroundColor: const Color(0xFFE8EAF6), foregroundColor: const Color(0xFF1A2B72)),
                                               onPressed: () => _asignarHardware(eq),
                                               icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
                                               label: const Text('Asignar', style: TextStyle(fontSize: 12)),

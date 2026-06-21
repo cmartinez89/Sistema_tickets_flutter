@@ -260,7 +260,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
               children: [
                 SizedBox(width: cardW, child: _cardResumen('Total Tickets', '$totalTickets', 'registrados', Colors.blue.shade700, Icons.confirmation_number_rounded)),
                 SizedBox(width: cardW, child: _cardResumen('Tickets Activos', '$activos', 'sin resolver', Colors.red.shade600, Icons.hourglass_top_rounded)),
-                SizedBox(width: cardW, child: _cardResumen('Equipos', '$totalEquipos', 'en inventario', Colors.teal.shade600, Icons.devices_rounded)),
+                SizedBox(width: cardW, child: _cardResumen('Equipos', '$totalEquipos', 'en inventario', const Color(0xFF1A2B72), Icons.devices_rounded)),
                 SizedBox(width: cardW, child: _cardResumen('Prom. Resolución', '${promedio.toStringAsFixed(1)}h', 'tiempo de cierre', Colors.orange.shade700, Icons.timer_rounded)),
               ],
             );
@@ -301,7 +301,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
           }()),
 
           // ── Tickets por Área ──────────────────────────────────────────────
-          _seccion('Tickets por Área', Icons.business_rounded, Colors.teal, () {
+          _seccion('Tickets por Área', Icons.business_rounded, const Color(0xFF1A2B72), () {
             if (porArea.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
             final top = porArea.take(8).toList();
             final max = top.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
@@ -310,7 +310,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 e['area']?.toString() ?? 'Sin área',
                 _int(e['total']),
                 max,
-                Colors.teal.shade500,
+                const Color(0xFF1A2B72),
               )).toList(),
             );
           }()),
@@ -372,7 +372,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
           }()),
 
           // ── Equipos por Tipo ──────────────────────────────────────────────
-          _seccion('Equipos por Tipo', Icons.computer_rounded, Colors.green, () {
+          _seccion('Equipos por Tipo', Icons.computer_rounded, const Color(0xFF1A2B72), () {
             if (eqTipo.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
             final max = eqTipo.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
             return Column(
@@ -380,7 +380,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 e['tipo']?.toString() ?? 'Otro',
                 _int(e['total']),
                 max,
-                Colors.green.shade600,
+                const Color(0xFF1565C0),
               )).toList(),
             );
           }()),
@@ -390,7 +390,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
             if (eqEstatus.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
             Color estatusColor(String s) => switch (s) {
               'Asignado'   => Colors.indigo.shade600,
-              'Disponible' => Colors.teal.shade600,
+              'Disponible' => Colors.blue.shade700,
               'Vendido'    => Colors.grey.shade600,
               _            => Colors.amber.shade700,
             };
