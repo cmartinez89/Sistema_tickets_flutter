@@ -255,6 +255,26 @@ class ApiService {
     if (res.statusCode != 200) throw Exception('Error al eliminar tipo de equipo');
   }
 
+  // ── IA ────────────────────────────────────────────────────────────────────────
+
+  Future<String> fetchAiConsulta(String pregunta) async {
+    final res = await http.post(Uri.parse('$kApiUrl/ai/consulta'), headers: _headers, body: jsonEncode({'pregunta': pregunta})).timeout(const Duration(seconds: 90));
+    if (res.statusCode != 200) throw Exception('Error IA: ${res.body}');
+    return (jsonDecode(res.body) as Map)['respuesta'] as String;
+  }
+
+  Future<Map<String, dynamic>> fetchAiAnomalias() async {
+    final res = await http.post(Uri.parse('$kApiUrl/ai/anomalias'), headers: _headers).timeout(const Duration(seconds: 120));
+    if (res.statusCode != 200) throw Exception('Error IA: ${res.body}');
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  Future<String> fetchAiSugerencia(String ticketId) async {
+    final res = await http.post(Uri.parse('$kApiUrl/ai/sugerencia/$ticketId'), headers: _headers).timeout(const Duration(seconds: 90));
+    if (res.statusCode != 200) throw Exception('Error IA: ${res.body}');
+    return (jsonDecode(res.body) as Map)['sugerencia'] as String;
+  }
+
   // ── FCM Token ────────────────────────────────────────────────────────────────
 
   Future<void> registrarFcmToken(String username, String token) async {

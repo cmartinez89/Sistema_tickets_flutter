@@ -5,9 +5,25 @@ from typing import Optional
 import pymysql
 import json
 import os
+import re
 from datetime import datetime, date
+
+# Cargar .env si existe (para ANTHROPIC_API_KEY y otras vars)
+_env_path = os.path.join(os.path.dirname(__file__), '.env')
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith('#') and '=' in _line:
+                _k, _v = _line.split('=', 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
 import firebase_admin
 from firebase_admin import credentials, messaging
+try:
+    import anthropic as _anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
 
 app = FastAPI(title="API Soporte Beta")
 
@@ -177,6 +193,9 @@ async def websocket_endpoint(websocket: WebSocket):
 # ============================================================================
 # MODELOS
 # ============================================================================
+class ConsultaAiRequest(BaseModel):
+    pregunta: str
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -933,3 +952,205 @@ async def create_mensaje(req: MensajeRequest):
     }
     await manager.broadcast(payload)
     return payload
+
+# ============================================================================
+# IA (Claude)
+# ============================================================================
+
+_ai_client = None
+
+def _get_ai_client():
+    global _ai_client
+    if not _ANTHROPIC_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Paquete anthropic no instalado en el servidor")
+    if _ai_client is None:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY no configurada")
+        _ai_client = _anthropic.Anthropic(api_key=api_key)
+    return _ai_client
+
+def _ai_text(response) -> str:
+    return ''.join(block.text for block in response.content if block.type == 'text')
+
+@app.post("/ai/consulta")
+def ai_consulta(req: ConsultaAiRequest):
+    client = _get_ai_client()
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT estado, prioridad, COUNT(*) as total FROM tickets GROUP BY estado, prioridad"
+            )
+            stats_tickets = cursor.fetchall()
+            cursor.execute(f"""
+                {TICKET_SELECT}
+                WHERE estado != 'Resuelto'
+                ORDER BY fecha DESC LIMIT 30
+            """)
+            tickets_abiertos = [_build_ticket(t) for t in cursor.fetchall()]
+            cursor.execute(
+                "SELECT tipo, estatus, COUNT(*) as total FROM equipos GROUP BY tipo, estatus"
+            )
+            stats_equipos = cursor.fetchall()
+            cursor.execute("SELECT username, nombre_completo AS nombreCompleto, rol FROM usuarios")
+            usuarios = cursor.fetchall()
+    finally:
+        connection.close()
+
+    system = f"""Eres un asistente de soporte TI para Beta Systems. Responde en español de forma concisa y práctica.
+
+ESTADÍSTICAS DE TICKETS (por estado y prioridad):
+{json.dumps(stats_tickets, ensure_ascii=False, default=str)}
+
+TICKETS ABIERTOS (máx 30, más recientes primero):
+{json.dumps(tickets_abiertos, ensure_ascii=False, default=str)}
+
+EQUIPOS (por tipo y estatus):
+{json.dumps(stats_equipos, ensure_ascii=False, default=str)}
+
+USUARIOS ACTIVOS:
+{json.dumps(usuarios, ensure_ascii=False, default=str)}
+
+Fecha actual: {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
+
+    with client.messages.stream(
+        model="claude-opus-4-8",
+        max_tokens=2048,
+        thinking={"type": "adaptive"},
+        system=system,
+        messages=[{"role": "user", "content": req.pregunta}]
+    ) as stream:
+        final = stream.get_final_message()
+    return {"respuesta": _ai_text(final)}
+
+
+@app.post("/ai/anomalias")
+def ai_anomalias():
+    client = _get_ai_client()
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f"{TICKET_SELECT} WHERE estado != 'Resuelto' ORDER BY fecha ASC")
+            tickets = [_build_ticket(t) for t in cursor.fetchall()]
+            cursor.execute("""
+                SELECT id, tipo, marca, modelo, empleado_asignado AS empleadoAsignado,
+                       ultimo_respaldo AS ultimoRespaldo, estatus, area
+                FROM equipos WHERE estatus NOT IN ('Vendido', 'Fuera de Servicio')
+                ORDER BY ultimo_respaldo ASC
+            """)
+            equipos = cursor.fetchall()
+            for e in equipos:
+                e['id'] = str(e['id'])
+                if isinstance(e.get('ultimoRespaldo'), datetime):
+                    e['ultimoRespaldo'] = e['ultimoRespaldo'].isoformat()
+            cursor.execute("""
+                SELECT t.id, t.asignado_a AS asignadoA, t.categoria, t.area, t.prioridad,
+                       t.fecha AS fechaCreacion,
+                       (SELECT MIN(h.fecha) FROM ticket_historial h
+                        WHERE h.ticket_id = t.id AND h.estado_nuevo = 'Resuelto') AS fechaResolucion
+                FROM tickets t WHERE t.estado = 'Resuelto'
+                ORDER BY t.fecha DESC LIMIT 30
+            """)
+            resueltos = cursor.fetchall()
+            for r in resueltos:
+                r['id'] = str(r['id'])
+                for k in ['fechaCreacion', 'fechaResolucion']:
+                    if isinstance(r.get(k), datetime):
+                        r[k] = r[k].isoformat()
+    finally:
+        connection.close()
+
+    system = """Eres un analista de TI experto en detección de anomalías en sistemas de soporte.
+Analiza los datos e identifica anomalías, patrones preocupantes o situaciones urgentes.
+
+Responde ÚNICAMENTE con JSON válido en este formato exacto:
+{
+  "anomalias": [
+    {
+      "titulo": "Título breve (máx 60 chars)",
+      "severidad": "alta|media|baja",
+      "descripcion": "Descripción del problema",
+      "recomendacion": "Acción recomendada"
+    }
+  ],
+  "resumen": "Resumen ejecutivo en 2-3 oraciones"
+}"""
+
+    datos = f"""TICKETS ABIERTOS:
+{json.dumps(tickets, ensure_ascii=False, default=str)}
+
+EQUIPOS ACTIVOS (con último respaldo):
+{json.dumps(equipos, ensure_ascii=False, default=str)}
+
+ÚLTIMOS 30 TICKETS RESUELTOS:
+{json.dumps(resueltos, ensure_ascii=False, default=str)}
+
+Fecha actual: {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
+
+    with client.messages.stream(
+        model="claude-opus-4-8",
+        max_tokens=3000,
+        thinking={"type": "adaptive"},
+        system=system,
+        messages=[{"role": "user", "content": datos}]
+    ) as stream:
+        final = stream.get_final_message()
+
+    texto = _ai_text(final)
+    try:
+        match = re.search(r'\{.*\}', texto, re.DOTALL)
+        result = json.loads(match.group()) if match else {"anomalias": [], "resumen": texto}
+    except Exception:
+        result = {"anomalias": [], "resumen": texto}
+    return result
+
+
+@app.post("/ai/sugerencia/{ticket_id}")
+def ai_sugerencia(ticket_id: str):
+    client = _get_ai_client()
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f"{TICKET_SELECT} WHERE id = %s", (ticket_id,))
+            ticket = cursor.fetchone()
+            if not ticket:
+                raise HTTPException(status_code=404, detail="Ticket no encontrado")
+            ticket = _build_ticket(ticket)
+            cursor.execute(f"""
+                {TICKET_SELECT}
+                WHERE estado = 'Resuelto'
+                AND (categoria = %s OR area = %s OR departamento = %s)
+                AND como_se_resolvio IS NOT NULL
+                ORDER BY fecha DESC LIMIT 10
+            """, (ticket.get('categoria'), ticket.get('area'), ticket.get('departamento')))
+            similares = [_build_ticket(t) for t in cursor.fetchall()]
+    finally:
+        connection.close()
+
+    system = """Eres un experto en soporte técnico de TI. Analiza el ticket y sugiere cómo resolverlo.
+Responde en español con:
+1. Diagnóstico probable (2-3 oraciones)
+2. Pasos recomendados (lista numerada)
+3. Causa raíz más probable
+4. Tiempo estimado de resolución
+
+Sé conciso y práctico. Usa el historial de tickets similares como referencia."""
+
+    prompt = f"""TICKET A RESOLVER:
+{json.dumps(ticket, ensure_ascii=False, default=str)}
+
+TICKETS SIMILARES YA RESUELTOS:
+{json.dumps(similares, ensure_ascii=False, default=str)}
+
+Sugiere cómo resolver el ticket {ticket_id}."""
+
+    with client.messages.stream(
+        model="claude-opus-4-8",
+        max_tokens=1500,
+        thinking={"type": "adaptive"},
+        system=system,
+        messages=[{"role": "user", "content": prompt}]
+    ) as stream:
+        final = stream.get_final_message()
+    return {"sugerencia": _ai_text(final), "ticket_id": ticket_id}

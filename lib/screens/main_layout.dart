@@ -16,6 +16,7 @@ import 'chat_screen.dart';
 import 'users_screen.dart';
 import 'admin_screen.dart';
 import 'reportes_screen.dart';
+import 'ai_screen.dart';
 import 'login_screen.dart';
 
 const String kWsUrl = 'ws://54.161.41.131:8000/ws';
@@ -241,6 +242,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         ),
         AdminScreen(api: _api),
         ReportesScreen(api: _api),
+        AiScreen(api: _api, session: widget.session),
       ],
     ];
 
@@ -293,6 +295,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
               _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', 5),
               _item(Icons.settings_rounded, 'Administración', 6),
               _item(Icons.bar_chart_rounded, 'Reportes', 7),
+              _item(Icons.smart_toy_rounded, 'Asistente IA', 8),
             ],
           ],
         ),

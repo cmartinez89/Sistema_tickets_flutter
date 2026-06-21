@@ -145,6 +145,8 @@ class _TicketsScreenState extends State<TicketsScreen> {
     bool guardando = false;
     List<Map<String, dynamic>> historial = [];
     bool loadingHistorial = true;
+    String? aiSugerencia;
+    bool cargandoAi = false;
 
     showDialog(
       context: context,
@@ -157,6 +159,16 @@ class _TicketsScreenState extends State<TicketsScreen> {
             }).catchError((_) {
               if (ctx.mounted) setDs(() => loadingHistorial = false);
             });
+          }
+
+          Future<void> pedirSugerenciaAi() async {
+            setDs(() => cargandoAi = true);
+            try {
+              final s = await widget.api.fetchAiSugerencia(t.id);
+              if (ctx.mounted) setDs(() { aiSugerencia = s; cargandoAi = false; });
+            } catch (e) {
+              if (ctx.mounted) setDs(() { aiSugerencia = 'Error: $e'; cargandoAi = false; });
+            }
           }
 
           return AlertDialog(
@@ -201,6 +213,66 @@ class _TicketsScreenState extends State<TicketsScreen> {
                         ),
                       ),
                     ],
+
+                    // Sugerencia IA
+                    if (t.estado != 'Resuelto') ...[
+                      const SizedBox(height: 10),
+                      if (aiSugerencia == null && !cargandoAi)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: pedirSugerenciaAi,
+                            icon: const Icon(Icons.smart_toy_rounded, size: 16),
+                            label: const Text('Sugerencia IA'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.deepPurple,
+                              side: BorderSide(color: Colors.deepPurple.shade200),
+                            ),
+                          ),
+                        )
+                      else if (cargandoAi)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Row(children: [
+                            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            SizedBox(width: 10),
+                            Text('Consultando IA...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          ]),
+                        )
+                      else if (aiSugerencia != null)
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.deepPurple.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.deepPurple.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.smart_toy_rounded, size: 14, color: Colors.deepPurple.shade600),
+                                  const SizedBox(width: 6),
+                                  Text('Sugerencia IA',
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.deepPurple.shade700)),
+                                  const Spacer(),
+                                  GestureDetector(
+                                    onTap: () => setDs(() => aiSugerencia = null),
+                                    child: Icon(Icons.close, size: 14, color: Colors.deepPurple.shade400),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              SelectableText(
+                                aiSugerencia!,
+                                style: TextStyle(fontSize: 12, color: Colors.deepPurple.shade900),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+
                     const Divider(height: 24),
 
                     // Historial timing

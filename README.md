@@ -58,6 +58,11 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - Equipos por tipo y por estatus
 - Tiempo promedio de resolución en horas
 
+### Asistente IA (Admin) — Claude claude-opus-4-8
+- **Asistente en lenguaje natural**: el admin puede hacer preguntas en español sobre el sistema ("¿qué técnico tiene más carga?", "¿cuántos tickets pendientes hay?", etc.). Claude recibe contexto real de la BD en cada consulta.
+- **Detección de anomalías**: análisis bajo demanda de todos los tickets abiertos, equipos sin respaldo y tiempos de resolución. Devuelve lista de anomalías con severidad (alta / media / baja) y recomendación de acción.
+- **Sugerencia de resolución**: botón "Sugerencia IA" en cada ticket no resuelto. Claude analiza el ticket y tickets similares ya resueltos para sugerir diagnóstico, pasos y tiempo estimado.
+
 ### Administración (Admin)
 - **Categorías de tickets**: dar de alta, editar y eliminar
 - **Áreas/Departamentos**: dar de alta, editar y eliminar
@@ -87,7 +92,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 **Flutter Web PWA** conectado a FastAPI backend en AWS EC2.
 
 ```
-LoginScreen → MainLayout → [Dashboard, Tickets, Equipos, Respaldos, Chat, Usuarios*, Admin*, Reportes*]
+LoginScreen → MainLayout → [Dashboard, Tickets, Equipos, Respaldos, Chat, Usuarios*, Admin*, Reportes*, AsistenteIA*]
                                                                                (* Solo Admin)
 ```
 
@@ -104,7 +109,7 @@ lib/
 │   ├── chat_message_model.dart  ← imagen (base64)
 │   └── usuario_model.dart
 ├── services/
-│   ├── api_service.dart         ← registrarFcmToken()
+│   ├── api_service.dart         ← registrarFcmToken(), fetchAiConsulta/Anomalias/Sugerencia()
 │   ├── websocket_service.dart
 │   └── notification_service.dart
 ├── utils/
@@ -115,16 +120,17 @@ lib/
     ├── login_screen.dart
     ├── main_layout.dart         ← registra token FCM al iniciar sesión
     ├── dashboard_screen.dart
-    ├── tickets_screen.dart
+    ├── tickets_screen.dart      ← botón "Sugerencia IA" en detalle de ticket
     ├── equipment_screen.dart
     ├── backups_screen.dart
     ├── chat_screen.dart
     ├── users_screen.dart
     ├── admin_screen.dart
     ├── reportes_screen.dart
+    ├── ai_screen.dart           ← Asistente IA + Detección de Anomalías (Admin)
     └── dialogo_nuevo_equipo.dart
 
-main_api.py                      ← backend FastAPI
+main_api.py                      ← backend FastAPI (incluye endpoints /ai/*)
 android/app/google-services.json ← config Firebase Android (no commiteado en repo público)
 ```
 
@@ -182,6 +188,9 @@ const String kWsUrl = 'ws://54.161.41.131:8000/ws';
 | `GET/POST` | `/mensajes` | Historial / enviar mensaje (con imagen) |
 | `WS` | `/ws` | Canal WebSocket tiempo real |
 | `POST` | `/usuarios/:username/fcm-token` | Registrar token FCM del dispositivo |
+| `POST` | `/ai/consulta` | Consulta en lenguaje natural al asistente IA |
+| `POST` | `/ai/anomalias` | Análisis de anomalías del sistema vía IA |
+| `POST` | `/ai/sugerencia/:ticket_id` | Sugerencia de resolución para un ticket vía IA |
 
 ---
 
