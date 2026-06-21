@@ -230,6 +230,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         mensajes: _mensajes,
         session: widget.session,
         api: _api,
+        usuarios: _usuarios,
         onVolver: () => setState(() => _screenIndex = _screenAnterior),
       ),
       if (widget.session.rol == 'Admin') ...[

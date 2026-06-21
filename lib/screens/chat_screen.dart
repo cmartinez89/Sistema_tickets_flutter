@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/chat_message_model.dart';
 import '../models/session_model.dart';
+import '../models/usuario_model.dart';
 import '../services/api_service.dart';
 
 const _kPaletaColores = [
@@ -51,6 +52,7 @@ class ChatScreen extends StatefulWidget {
   final List<ChatMessage> mensajes;
   final Session session;
   final ApiService api;
+  final List<Usuario> usuarios;
   final VoidCallback? onVolver;
 
   const ChatScreen({
@@ -58,6 +60,7 @@ class ChatScreen extends StatefulWidget {
     required this.mensajes,
     required this.session,
     required this.api,
+    required this.usuarios,
     this.onVolver,
   });
 
@@ -70,12 +73,60 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollCtrl = ScrollController();
   bool _enviando = false;
   String? _imagenSeleccionada;
+  List<Usuario> _sugerencias = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _inputCtrl.addListener(_detectarMencion);
+  }
 
   @override
   void dispose() {
+    _inputCtrl.removeListener(_detectarMencion);
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  void _detectarMencion() {
+    final text = _inputCtrl.text;
+    final cursor = _inputCtrl.selection.baseOffset;
+    if (cursor < 0 || text.isEmpty) {
+      if (_sugerencias.isNotEmpty) setState(() => _sugerencias = []);
+      return;
+    }
+    final antes = text.substring(0, cursor);
+    final atIdx = antes.lastIndexOf('@');
+    if (atIdx == -1) {
+      if (_sugerencias.isNotEmpty) setState(() => _sugerencias = []);
+      return;
+    }
+    final query = antes.substring(atIdx + 1);
+    if (query.contains(' ') || query.contains('\n')) {
+      if (_sugerencias.isNotEmpty) setState(() => _sugerencias = []);
+      return;
+    }
+    final filtrados = widget.usuarios
+        .where((u) =>
+            u.username != widget.session.username &&
+            (u.username.toLowerCase().contains(query.toLowerCase()) ||
+                u.nombreCompleto.toLowerCase().contains(query.toLowerCase())))
+        .toList();
+    setState(() => _sugerencias = filtrados);
+  }
+
+  void _seleccionarMencion(Usuario u) {
+    final text = _inputCtrl.text;
+    final cursor = _inputCtrl.selection.baseOffset;
+    final antes = text.substring(0, cursor);
+    final atIdx = antes.lastIndexOf('@');
+    final nuevo = '${text.substring(0, atIdx)}@${u.username} ${text.substring(cursor)}';
+    _inputCtrl.value = TextEditingValue(
+      text: nuevo,
+      selection: TextSelection.collapsed(offset: atIdx + u.username.length + 2),
+    );
+    setState(() => _sugerencias = []);
   }
 
   @override
@@ -206,6 +257,36 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
           ),
 
+          // Mention suggestions
+          if (_sugerencias.isNotEmpty)
+            Container(
+              constraints: const BoxConstraints(maxHeight: 220),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, -2))],
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _sugerencias.length,
+                itemBuilder: (_, i) {
+                  final u = _sugerencias[i];
+                  final color = _colorDeUsuario(u.username);
+                  return ListTile(
+                    dense: true,
+                    leading: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: color.withValues(alpha: 0.15),
+                      child: Text(u.inicial, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                    title: Text(u.nombreCompleto, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    subtitle: Text('@${u.username}', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    onTap: () => _seleccionarMencion(u),
+                  );
+                },
+              ),
+            ),
+
           // Image preview strip
           if (_imagenSeleccionada != null)
             Container(
@@ -326,6 +407,45 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+class _TextoConMenciones extends StatelessWidget {
+  final String texto;
+  final bool esMio;
+  final Color colorPrimary;
+
+  const _TextoConMenciones({required this.texto, required this.esMio, required this.colorPrimary});
+
+  @override
+  Widget build(BuildContext context) {
+    final regex = RegExp(r'@\w+');
+    final spans = <TextSpan>[];
+    int last = 0;
+    for (final m in regex.allMatches(texto)) {
+      if (m.start > last) {
+        spans.add(TextSpan(
+          text: texto.substring(last, m.start),
+          style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
+        ));
+      }
+      spans.add(TextSpan(
+        text: m.group(0),
+        style: TextStyle(
+          color: esMio ? Colors.white : colorPrimary,
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        ),
+      ));
+      last = m.end;
+    }
+    if (last < texto.length) {
+      spans.add(TextSpan(
+        text: texto.substring(last),
+        style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
+      ));
+    }
+    return RichText(text: TextSpan(children: spans));
+  }
+}
+
 class _BurbujaMensaje extends StatelessWidget {
   final ChatMessage mensaje;
   final bool esMio;
@@ -417,9 +537,10 @@ class _BurbujaMensaje extends StatelessWidget {
                         if (mensaje.texto.isNotEmpty) const SizedBox(height: 6),
                       ],
                       if (mensaje.texto.isNotEmpty)
-                        Text(
-                          mensaje.texto,
-                          style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
+                        _TextoConMenciones(
+                          texto: mensaje.texto,
+                          esMio: esMio,
+                          colorPrimary: colorPrimary,
                         ),
                       const SizedBox(height: 3),
                       Text(
