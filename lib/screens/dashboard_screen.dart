@@ -123,13 +123,13 @@ class DashboardScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF00796B), Color(0xFF004D40)],
+          colors: [Color(0xFF1A2B72), Color(0xFF0D1A4A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF00695C).withValues(alpha: 0.4), blurRadius: 18, offset: const Offset(0, 6)),
+          BoxShadow(color: const Color(0xFF1A2B72).withValues(alpha: 0.4), blurRadius: 18, offset: const Offset(0, 6)),
         ],
       ),
       child: Row(
