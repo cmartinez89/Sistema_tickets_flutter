@@ -54,6 +54,16 @@ class _MainLayoutState extends State<MainLayout> {
       _cargarUsuarios();
     });
     _actualizarEstadoNotif();
+    _registrarFcmToken();
+  }
+
+  Future<void> _registrarFcmToken() async {
+    try {
+      final token = await getFcmToken();
+      if (token != null) {
+        await _api.registrarFcmToken(widget.session.username, token);
+      }
+    } catch (_) {}
   }
 
   @override

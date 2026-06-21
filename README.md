@@ -70,6 +70,13 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - WebSocket permanente con reconexión automática
 - Notificaciones nativas del navegador para nuevos tickets, cambios de estado y mensajes
 
+### Notificaciones Push Android (FCM)
+- **Firebase Cloud Messaging** integrado con `firebase_messaging` + `flutter_local_notifications`
+- El token FCM se registra automáticamente en el backend al iniciar sesión
+- El técnico recibe notificación push cuando se le asigna un ticket nuevo o se le reasigna uno existente
+- Las notificaciones llegan aunque la app esté en segundo plano o cerrada
+- Canales de alta prioridad configurados en Android (vibración + sonido)
+
 ---
 
 ## Arquitectura
@@ -85,7 +92,8 @@ LoginScreen → MainLayout → [Dashboard, Tickets, Equipos, Respaldos, Chat, Us
 
 ```
 lib/
-├── main.dart
+├── main.dart                    ← inicializa Firebase antes de runApp()
+├── firebase_options.dart        ← opciones FCM (generado de google-services.json)
 ├── models/
 │   ├── session_model.dart
 │   ├── ticket_model.dart        ← escaladoA, motivoEscalado, tipoTicket, categoria, area, imagenResolucion
@@ -93,23 +101,28 @@ lib/
 │   ├── chat_message_model.dart  ← imagen (base64)
 │   └── usuario_model.dart
 ├── services/
-│   ├── api_service.dart
+│   ├── api_service.dart         ← registrarFcmToken()
 │   ├── websocket_service.dart
 │   └── notification_service.dart
+├── utils/
+│   ├── notif_helper.dart        ← export condicional web/nativo
+│   ├── notif_helper_stub.dart   ← FCM + flutter_local_notifications (Android/iOS)
+│   └── notif_helper_web.dart    ← Web Notifications API (Chrome/PWA)
 └── screens/
     ├── login_screen.dart
-    ├── main_layout.dart
+    ├── main_layout.dart         ← registra token FCM al iniciar sesión
     ├── dashboard_screen.dart
     ├── tickets_screen.dart
     ├── equipment_screen.dart
     ├── backups_screen.dart
     ├── chat_screen.dart
     ├── users_screen.dart
-    ├── admin_screen.dart         ← NUEVO: CRUD de categorías, áreas y tipos de equipo
-    ├── reportes_screen.dart      ← NUEVO: gráficas y métricas
+    ├── admin_screen.dart
+    ├── reportes_screen.dart
     └── dialogo_nuevo_equipo.dart
 
 main_api.py                      ← backend FastAPI
+android/app/google-services.json ← config Firebase Android (no commiteado en repo público)
 ```
 
 ---
@@ -117,10 +130,11 @@ main_api.py                      ← backend FastAPI
 ## Comandos de desarrollo
 
 ```bash
-flutter pub get          # instalar dependencias
-flutter run -d chrome    # desarrollo en Chrome
-flutter build web        # build de producción
-flutter analyze          # análisis estático
+flutter pub get              # instalar dependencias
+flutter run -d chrome        # desarrollo en Chrome
+flutter build web            # build de producción web (PWA)
+flutter build apk --release  # build APK Android
+flutter analyze              # análisis estático
 ```
 
 ---
@@ -164,6 +178,7 @@ const String kWsUrl = 'ws://54.161.41.131:8000/ws';
 | `GET` | `/reportes` | Métricas y datos para gráficas |
 | `GET/POST` | `/mensajes` | Historial / enviar mensaje (con imagen) |
 | `WS` | `/ws` | Canal WebSocket tiempo real |
+| `POST` | `/usuarios/:username/fcm-token` | Registrar token FCM del dispositivo |
 
 ---
 

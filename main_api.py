@@ -4,7 +4,10 @@ from pydantic import BaseModel
 from typing import Optional
 import pymysql
 import json
+import os
 from datetime import datetime, date
+import firebase_admin
+from firebase_admin import credentials, messaging
 
 app = FastAPI(title="API Soporte Beta")
 
@@ -15,6 +18,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Firebase Admin SDK ────────────────────────────────────────────────────────
+_SERVICE_ACCOUNT = os.path.join(os.path.dirname(__file__), "soporte-bsm-firebase-adminsdk-fbsvc-cd0f021b80.json")
+if not firebase_admin._apps and os.path.exists(_SERVICE_ACCOUNT):
+    _cred = credentials.Certificate(_SERVICE_ACCOUNT)
+    firebase_admin.initialize_app(_cred)
+
+def _send_fcm(username: str, title: str, body: str):
+    """Envía notificación FCM al token registrado de un usuario. Silencioso si falla."""
+    try:
+        connection = get_db_connection()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT fcm_token FROM usuarios WHERE username = %s", (username,))
+                row = cursor.fetchone()
+        finally:
+            connection.close()
+        token = row.get('fcm_token') if row else None
+        if not token or not firebase_admin._apps:
+            return
+        messaging.send(messaging.Message(
+            notification=messaging.Notification(title=title, body=body),
+            android=messaging.AndroidConfig(priority="high"),
+            token=token,
+        ))
+    except Exception:
+        pass
 
 def get_db_connection():
     return pymysql.connect(
@@ -244,6 +274,9 @@ class UsuarioUpdateRequest(BaseModel):
 class CatalogoItemRequest(BaseModel):
     nombre: str
 
+class FcmTokenRequest(BaseModel):
+    fcmToken: str
+
 # ============================================================================
 # AUTENTICACION
 # ============================================================================
@@ -313,6 +346,8 @@ async def create_ticket(req: TicketCreateRequest):
     finally:
         connection.close()
     await manager.broadcast({"tipo": "tickets", "accion": "nuevo"})
+    if req.asignadoA:
+        _send_fcm(req.asignadoA, f"Nuevo ticket {new_id}", req.descripcion[:80])
     return _build_ticket(t)
 
 @app.put("/tickets/{ticket_id}/status")
@@ -387,6 +422,7 @@ async def reassign_ticket(ticket_id: str, req: TicketReasignarRequest):
     finally:
         connection.close()
     await manager.broadcast({"tipo": "tickets", "accion": "reasignado", "id": ticket_id})
+    _send_fcm(req.asignadoA, f"Ticket reasignado: {ticket_id}", "Se te ha asignado un ticket")
     return {"status": "success"}
 
 @app.get("/tickets/{ticket_id}/historial")
@@ -830,6 +866,22 @@ async def delete_usuario(username: str):
         connection.close()
     await manager.broadcast({"tipo": "usuarios", "accion": "eliminado"})
     return {"status": "success"}
+
+@app.post("/usuarios/{username}/fcm-token")
+async def save_fcm_token(username: str, req: FcmTokenRequest):
+    token = req.fcmToken.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="fcmToken requerido")
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE usuarios SET fcm_token = %s WHERE username = %s", (token, username))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            connection.commit()
+    finally:
+        connection.close()
+    return {"status": "ok"}
 
 # ============================================================================
 # CHAT

@@ -3,8 +3,12 @@ import 'models/session_model.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_layout.dart';
 import 'services/notification_service.dart';
+import 'utils/notif_helper.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initPlatformServices(DefaultFirebaseOptions.currentPlatform);
   runApp(const SoporteBetaApp());
 }
 

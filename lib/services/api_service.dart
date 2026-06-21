@@ -255,6 +255,15 @@ class ApiService {
     if (res.statusCode != 200) throw Exception('Error al eliminar tipo de equipo');
   }
 
+  // ── FCM Token ────────────────────────────────────────────────────────────────
+
+  Future<void> registrarFcmToken(String username, String token) async {
+    try {
+      await http.post(Uri.parse('$kApiUrl/usuarios/$username/fcm-token'),
+          headers: _headers, body: jsonEncode({'fcmToken': token})).timeout(kTimeout);
+    } catch (_) {}
+  }
+
   // ── Reportes ─────────────────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>> fetchReportes() async {

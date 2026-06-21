@@ -20,3 +20,10 @@ ios/.symlinks/
 *.pem
 *.key
 *.env
+*firebase-adminsdk*.json
+soporte-bsm-firebase-adminsdk*.json
+
+# Duplicados macOS
+* 2.*
+.DS_Store
+**/.DS_Store
