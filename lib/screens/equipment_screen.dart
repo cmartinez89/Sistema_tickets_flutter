@@ -33,12 +33,14 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   String? _filtroArea;
   String? _filtroEstatus;
   List<String> _tiposEquipo = ['Laptop', 'Desktop', 'Servidor', 'Celular', 'Bastón', 'Radio', 'Tablet'];
+  List<String> _areasDisponibles = [];
 
   @override
   void initState() {
     super.initState();
     _busquedaCtrl.addListener(() => setState(() {}));
     _cargarTipos();
+    _cargarAreas();
   }
 
   @override
@@ -53,6 +55,17 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     try {
       final tipos = await widget.api.fetchTiposEquipo();
       if (mounted) setState(() => _tiposEquipo = tipos.map((t) => t['nombre'] as String).toList());
+    } catch (_) {}
+  }
+
+  Future<void> _cargarAreas() async {
+    try {
+      final areas = await widget.api.fetchAreas();
+      if (mounted) {
+        setState(() {
+          _areasDisponibles = areas.map((a) => a['nombre'] as String).toList()..sort();
+        });
+      }
     } catch (_) {}
   }
 
@@ -428,7 +441,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     api: widget.api,
                     onRefresh: widget.onRefresh,
                     tiposDisponibles: _tiposEquipo,
-                    areas: uniqueAreas,
+                    areas: _areasDisponibles,
                   ),
                   icon: const Icon(Icons.computer_rounded, size: 16),
                   label: const Text('Alta Equipo'),

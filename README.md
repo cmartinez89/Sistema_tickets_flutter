@@ -25,6 +25,8 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 ### Chat Interno
 - Chat en tiempo real via WebSocket entre técnicos y administrador
 - **Envío de imágenes** en el chat
+- **Borrar mensajes**: long press en un mensaje propio para eliminarlo; los demás ven "Este mensaje fue eliminado"
+- **Vista de Admin**: el administrador siempre ve el contenido original de los mensajes borrados, con un badge que indica quién los eliminó
 - Colores únicos por usuario (paleta determinista de 12 tonos)
 - Badge rojo con contador de mensajes no leídos
 - Botón flotante (FAB) visible en toda la aplicación
@@ -119,7 +121,7 @@ lib/
 │   ├── session_model.dart
 │   ├── ticket_model.dart        ← escaladoA, motivoEscalado, tipoTicket, categoria, area, imagenResolucion
 │   ├── equipo_model.dart        ← area, macAddress, folioActivo, fechaVenta, precioVenta, esObsoleto
-│   ├── chat_message_model.dart  ← imagen (base64)
+│   ├── chat_message_model.dart  ← imagen (base64), borrado, borradoPor
 │   └── usuario_model.dart
 ├── services/
 │   ├── api_service.dart         ← registrarFcmToken(), fetchAiConsulta/Anomalias/Sugerencia()
@@ -220,6 +222,7 @@ const String kWsUrl = 'ws://54.161.41.131:8000/ws';
 | `GET/POST/PUT/DELETE` | `/tipos-equipo` | CRUD tipos de equipo |
 | `GET` | `/reportes` | Métricas y datos para gráficas |
 | `GET/POST` | `/mensajes` | Historial / enviar mensaje (con imagen) |
+| `DELETE` | `/mensajes/:id` | Soft-delete de mensaje (guarda quién borró) |
 | `WS` | `/ws` | Canal WebSocket tiempo real |
 | `POST` | `/usuarios/:username/fcm-token` | Registrar token FCM del dispositivo |
 | `POST` | `/ai/consulta` | Consulta en lenguaje natural al asistente IA |

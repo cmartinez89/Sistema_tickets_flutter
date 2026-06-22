@@ -139,6 +139,12 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           msg.texto.isNotEmpty ? msg.texto : '📷 Imagen',
         );
       }
+    } else if (tipo == 'chat_borrado') {
+      final id = datos['id']?.toString() ?? '';
+      final borradoPor = datos['borradoPor']?.toString() ?? '';
+      setState(() {
+        _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: borradoPor) : m).toList();
+      });
     } else if (tipo == 'usuarios') {
       _cargarUsuarios();
     } else {
@@ -233,6 +239,12 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         api: _api,
         usuarios: _usuarios,
         onVolver: () => setState(() => _screenIndex = _screenAnterior),
+        onBorrarMensaje: (id) async {
+          await _api.borrarMensaje(id, widget.session.username);
+          setState(() {
+            _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: widget.session.username) : m).toList();
+          });
+        },
       ),
       if (widget.session.rol == 'Admin') ...[
         UsersScreen(

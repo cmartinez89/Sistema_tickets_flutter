@@ -975,7 +975,9 @@ def get_mensajes():
         with connection.cursor() as cursor:
             cursor.execute("""
                 SELECT id, de_usuario AS deUsuario, nombre_completo AS nombreCompleto,
-                       texto, imagen, fecha
+                       texto, imagen, fecha,
+                       COALESCE(borrado, 0) AS borrado,
+                       borrado_por AS borradoPor
                 FROM mensajes ORDER BY fecha ASC LIMIT 200
             """)
             mensajes = cursor.fetchall()
@@ -983,9 +985,28 @@ def get_mensajes():
                 m['id'] = str(m['id'])
                 if isinstance(m['fecha'], datetime):
                     m['fecha'] = m['fecha'].isoformat()
+                m['borrado'] = bool(m['borrado'])
             return mensajes
     finally:
         connection.close()
+
+@app.delete("/mensajes/{mensaje_id}")
+async def delete_mensaje(mensaje_id: int, borrado_por: str):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE mensajes SET borrado = 1, borrado_por = %s WHERE id = %s",
+                (borrado_por, mensaje_id)
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+            connection.commit()
+    finally:
+        connection.close()
+    payload = {"tipo": "chat_borrado", "id": str(mensaje_id), "borradoPor": borrado_por}
+    await manager.broadcast(payload)
+    return {"ok": True}
 
 @app.post("/mensajes")
 async def create_mensaje(req: MensajeRequest):

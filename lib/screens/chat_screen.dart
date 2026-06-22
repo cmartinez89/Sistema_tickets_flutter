@@ -54,6 +54,7 @@ class ChatScreen extends StatefulWidget {
   final ApiService api;
   final List<Usuario> usuarios;
   final VoidCallback? onVolver;
+  final Future<void> Function(String id)? onBorrarMensaje;
 
   const ChatScreen({
     super.key,
@@ -62,6 +63,7 @@ class ChatScreen extends StatefulWidget {
     required this.api,
     required this.usuarios,
     this.onVolver,
+    this.onBorrarMensaje,
   });
 
   @override
@@ -183,9 +185,44 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _confirmarBorrado(ChatMessage msg) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Borrar mensaje'),
+        content: const Text('¿Eliminar este mensaje? Los demás usuarios verán que fue eliminado.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await widget.onBorrarMensaje?.call(msg.id);
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error al borrar: $e'), backgroundColor: Colors.redAccent),
+                  );
+                }
+              }
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _puedeBorar(ChatMessage msg) {
+    if (msg.borrado) return false;
+    return widget.session.rol == 'Admin' || msg.deUsuario == widget.session.username;
+  }
+
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final esAdmin = widget.session.rol == 'Admin';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -246,12 +283,16 @@ class _ChatScreenState extends State<ChatScreen> {
                       final mostrarNombre = !esMio &&
                           (i == 0 || widget.mensajes[i - 1].deUsuario != msg.deUsuario);
 
-                      return _BurbujaMensaje(
-                        mensaje: msg,
-                        esMio: esMio,
-                        mostrarNombre: mostrarNombre,
-                        colorPrimary: primary,
-                        colorUsuario: _colorDeUsuario(msg.deUsuario),
+                      return GestureDetector(
+                        onLongPress: _puedeBorar(msg) ? () => _confirmarBorrado(msg) : null,
+                        child: _BurbujaMensaje(
+                          mensaje: msg,
+                          esMio: esMio,
+                          esAdmin: esAdmin,
+                          mostrarNombre: mostrarNombre,
+                          colorPrimary: primary,
+                          colorUsuario: _colorDeUsuario(msg.deUsuario),
+                        ),
                       );
                     },
                   ),
@@ -449,6 +490,7 @@ class _TextoConMenciones extends StatelessWidget {
 class _BurbujaMensaje extends StatelessWidget {
   final ChatMessage mensaje;
   final bool esMio;
+  final bool esAdmin;
   final bool mostrarNombre;
   final Color colorPrimary;
   final Color colorUsuario;
@@ -456,6 +498,7 @@ class _BurbujaMensaje extends StatelessWidget {
   const _BurbujaMensaje({
     required this.mensaje,
     required this.esMio,
+    required this.esAdmin,
     required this.mostrarNombre,
     required this.colorPrimary,
     required this.colorUsuario,
@@ -469,12 +512,43 @@ class _BurbujaMensaje extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imagenBytes = _decodeImage(mensaje.imagen);
+    final borrado = mensaje.borrado;
+
+    // Usuario normal ve burbujas vacías para mensajes eliminados
+    if (borrado && !esAdmin) {
+      return Padding(
+        padding: EdgeInsets.only(top: mostrarNombre ? 12 : 3, bottom: 2),
+        child: Row(
+          mainAxisAlignment: esMio ? MainAxisAlignment.end : MainAxisAlignment.start,
+          children: [
+            if (!esMio) const SizedBox(width: 38),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.block_rounded, size: 14, color: Colors.grey.shade400),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Este mensaje fue eliminado',
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                  ),
+                ],
+              ),
+            ),
+            if (esMio) const SizedBox(width: 4),
+          ],
+        ),
+      );
+    }
 
     return Padding(
-      padding: EdgeInsets.only(
-        top: mostrarNombre ? 12 : 3,
-        bottom: 2,
-      ),
+      padding: EdgeInsets.only(top: mostrarNombre ? 12 : 3, bottom: 2),
       child: Row(
         mainAxisAlignment: esMio ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -506,18 +580,37 @@ class _BurbujaMensaje extends StatelessWidget {
                   constraints: const BoxConstraints(maxWidth: 480),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
-                    color: esMio ? colorPrimary : Colors.white,
+                    color: borrado
+                        ? (esMio ? colorPrimary.withValues(alpha: 0.5) : Colors.grey.shade200)
+                        : (esMio ? colorPrimary : Colors.white),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
                       bottomLeft: Radius.circular(esMio ? 18 : 4),
                       bottomRight: Radius.circular(esMio ? 4 : 18),
                     ),
+                    border: borrado ? Border.all(color: Colors.red.withValues(alpha: 0.3)) : null,
                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      // Admin badge when showing deleted message
+                      if (borrado && esAdmin)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.delete_outline_rounded, size: 12, color: Colors.red.shade300),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Eliminado por ${mensaje.borradoPor ?? '?'}',
+                                style: TextStyle(fontSize: 10, color: Colors.red.shade300, fontStyle: FontStyle.italic),
+                              ),
+                            ],
+                          ),
+                        ),
                       // Image if present
                       if (imagenBytes != null) ...[
                         GestureDetector(
