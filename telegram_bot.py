@@ -35,6 +35,7 @@ DB = dict(
 )
 
 REGISTRO     = 1
+REGISTRO_AREA = 4
 CONVERSACION = 2
 CONFIRMACION = 3
 
@@ -56,7 +57,7 @@ def usuario_por_telegram_id(tid: int):
     try:
         with db.cursor() as c:
             c.execute(
-                "SELECT username, nombre_completo, rol FROM usuarios WHERE telegram_id = %s",
+                "SELECT username, nombre_completo, rol, area FROM usuarios WHERE telegram_id = %s",
                 (tid,)
             )
             return c.fetchone()
@@ -68,7 +69,7 @@ def usuario_por_username(username: str):
     try:
         with db.cursor() as c:
             c.execute(
-                "SELECT username, nombre_completo, rol FROM usuarios WHERE username = %s",
+                "SELECT username, nombre_completo, rol, area FROM usuarios WHERE username = %s",
                 (username.strip().lower(),)
             )
             return c.fetchone()
@@ -82,6 +83,18 @@ def vincular_telegram(username: str, tid: int):
             c.execute(
                 "UPDATE usuarios SET telegram_id = %s WHERE username = %s",
                 (tid, username)
+            )
+            db.commit()
+    finally:
+        db.close()
+
+def guardar_area(username: str, area: str):
+    db = _db()
+    try:
+        with db.cursor() as c:
+            c.execute(
+                "UPDATE usuarios SET area = %s WHERE username = %s",
+                (area, username)
             )
             db.commit()
     finally:
@@ -125,13 +138,15 @@ SYSTEM = """\
 Eres el asistente de soporte técnico de Beta Systems. Tu trabajo es recopilar la \
 información necesaria para crear un ticket de soporte, de forma amable y natural.
 
+Usuario: {nombre} — Área: {area_usuario}
+
 Datos que DEBES obtener:
 1. descripcion — qué problema o solicitud tiene el usuario (sé específico)
 2. prioridad   — Alta / Media / Baja
    • Alta:  sistema caído, bloquea el trabajo completamente
    • Media: problema parcial, puede trabajar con limitaciones
    • Baja:  mejora, consulta o solicitud no urgente
-3. area        — área o departamento que reporta el problema
+3. area        — usa "{area_usuario}" si el usuario no indica otra; solo pregunta si es ambiguo
 4. categoria   — tipo de problema
 
 Áreas disponibles:     {areas}
@@ -140,14 +155,19 @@ Categorías disponibles: {cats}
 Reglas:
 - Máximo 2 oraciones por respuesta. No seas redundante.
 - Si el usuario ya dio suficiente info, infiere los campos que puedas y solo pregunta lo que falta.
-- Si el mensaje es claro ("la impresora no jala en Ventas"), puedes tener todo en un solo intercambio.
-- Cuando tengas los 4 campos con certeza, responde ÚNICAMENTE con este JSON (sin texto adicional):
+- Si el mensaje es claro ("la impresora no jala"), ya tienes el área del perfil — no la preguntes.
+- Cuando tengas los 4 campos con certeza, responde ÚNICAMENTE con este JSON puro, sin markdown, \
+sin backticks, sin texto antes ni después:
 {{"listo":true,"descripcion":"...","prioridad":"Alta|Media|Baja","area":"...","categoria":"..."}}
 """
 
-def claude(historial: list, areas: list, cats: list) -> dict:
+def claude(historial: list, areas: list, cats: list, usuario: dict = None) -> dict:
     """Retorna {'texto': str} o {'ticket': dict}"""
-    system = SYSTEM.format(areas=", ".join(areas), cats=", ".join(cats))
+    import re
+    nombre = usuario.get('nombre_completo', 'Usuario') if usuario else 'Usuario'
+    area_u = usuario.get('area') or 'no especificada' if usuario else 'no especificada'
+    system = SYSTEM.format(areas=", ".join(areas), cats=", ".join(cats),
+                           nombre=nombre, area_usuario=area_u)
     resp = _ai.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=512,
@@ -155,12 +175,25 @@ def claude(historial: list, areas: list, cats: list) -> dict:
         messages=historial,
     )
     raw = resp.content[0].text.strip()
+
+    # Intentar parsear directo
     try:
         data = json.loads(raw)
         if data.get('listo'):
             return {'ticket': data}
     except Exception:
         pass
+
+    # Extraer JSON aunque venga envuelto en ```json ... ``` o con texto alrededor
+    match = re.search(r'\{.*?"listo"\s*:\s*true.*?\}', raw, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group())
+            if data.get('listo'):
+                return {'ticket': data}
+        except Exception:
+            pass
+
     return {'texto': raw}
 
 # ─── Crear ticket vía API ─────────────────────────────────────────────────────
@@ -218,7 +251,7 @@ async def registro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if not usuario:
         await update.message.reply_text(
-            f"❌ No encontré el usuario `{username}` en el sistema\\.\n"
+            f"❌ No encontré el usuario `{_esc(username)}` en el sistema\\.\n"
             "Verifica que sea correcto o pide al administrador que te registre\\.\n\n"
             "Intenta de nuevo:",
             parse_mode='MarkdownV2',
@@ -227,15 +260,60 @@ async def registro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     tid = update.effective_user.id
     vincular_telegram(usuario['username'], tid)
+    ctx.user_data['usuario'] = usuario
 
+    # Si ya tiene área guardada, pasar directo a conversación
+    if usuario.get('area'):
+        ctx.user_data['historial'] = []
+        ctx.user_data['areas']     = get_areas()
+        ctx.user_data['cats']      = get_categorias()
+        await update.message.reply_text(
+            f"✅ ¡Verificado\\! Hola *{_esc(usuario['nombre_completo'])}*\\.\n"
+            "Tu Telegram queda vinculado, la próxima vez te reconoceré automáticamente\\.\n\n"
+            "Cuéntame, ¿en qué te puedo ayudar?",
+            parse_mode='MarkdownV2',
+        )
+        return CONVERSACION
+
+    # Sin área → pedirla
+    areas = get_areas()
+    ctx.user_data['areas'] = areas
+    lista = '\n'.join(f"• {a}" for a in areas)
+    await update.message.reply_text(
+        f"✅ ¡Verificado\\! Hola *{_esc(usuario['nombre_completo'])}*\\.\n\n"
+        f"Una última cosa: ¿en qué área trabajas?\n\n{_esc(lista)}",
+        parse_mode='MarkdownV2',
+    )
+    return REGISTRO_AREA
+
+
+async def registro_area(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    texto = update.message.text.strip()
+    areas = ctx.user_data.get('areas', get_areas())
+
+    # Buscar área más parecida (case-insensitive, coincidencia parcial)
+    area_encontrada = next(
+        (a for a in areas if texto.lower() in a.lower() or a.lower() in texto.lower()),
+        None
+    )
+
+    if not area_encontrada:
+        lista = '\n'.join(f"• {a}" for a in areas)
+        await update.message.reply_text(
+            f"No reconozco esa área\\. Por favor elige una de las siguientes:\n\n{_esc(lista)}",
+            parse_mode='MarkdownV2',
+        )
+        return REGISTRO_AREA
+
+    usuario = ctx.user_data['usuario']
+    guardar_area(usuario['username'], area_encontrada)
+    usuario['area'] = area_encontrada
     ctx.user_data['usuario']   = usuario
     ctx.user_data['historial'] = []
-    ctx.user_data['areas']     = get_areas()
     ctx.user_data['cats']      = get_categorias()
 
     await update.message.reply_text(
-        f"✅ ¡Verificado\\! Hola *{usuario['nombre_completo']}*\\.\n"
-        "Tu Telegram queda vinculado, la próxima vez te reconoceré automáticamente\\.\n\n"
+        f"Perfecto\\! Área *{_esc(area_encontrada)}* guardada\\.\n\n"
         "Cuéntame, ¿en qué te puedo ayudar?",
         parse_mode='MarkdownV2',
     )
@@ -255,7 +333,7 @@ async def _procesar_mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     historial.append({'role': 'user', 'content': texto})
     await ctx.bot.send_chat_action(update.effective_chat.id, 'typing')
 
-    resultado = claude(historial, areas, cats)
+    resultado = claude(historial, areas, cats, usuario=ctx.user_data.get('usuario'))
 
     if 'ticket' in resultado:
         t = resultado['ticket']
@@ -365,12 +443,12 @@ def main():
             MessageHandler(filters.TEXT & ~filters.COMMAND, entrada),
         ],
         states={
-            REGISTRO:     [MessageHandler(filters.TEXT & ~filters.COMMAND, registro)],
-            CONVERSACION: [MessageHandler(filters.TEXT & ~filters.COMMAND, conversacion)],
-            CONFIRMACION: [CallbackQueryHandler(confirmacion)],
+            REGISTRO:      [MessageHandler(filters.TEXT & ~filters.COMMAND, registro)],
+            REGISTRO_AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, registro_area)],
+            CONVERSACION:  [MessageHandler(filters.TEXT & ~filters.COMMAND, conversacion)],
+            CONFIRMACION:  [CallbackQueryHandler(confirmacion)],
         },
         fallbacks=[CommandHandler('cancelar', cancelar)],
-        allow_reentry=True,
         per_message=False,
     )
 

@@ -131,7 +131,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
   void _abrirDialogoEditar(Ticket t) {
     String nuevoEstado = t.estado;
-    String nuevoAsignado = t.asignadoA;
+    String nuevoAsignado = t.asignadoA.isEmpty ? 'Sin Asignar' : t.asignadoA;
     String tipoTicket = t.tipoTicket ?? 'Incidencia';
     final causaCtrl = TextEditingController(text: t.causaRaiz ?? '');
     final resolverCtrl = TextEditingController(text: t.comoSeResolvio ?? '');
