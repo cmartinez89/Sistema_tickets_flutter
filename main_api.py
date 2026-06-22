@@ -296,6 +296,10 @@ class CatalogoItemRequest(BaseModel):
 class FcmTokenRequest(BaseModel):
     fcmToken: str
 
+class CambiarPasswordRequest(BaseModel):
+    username: str
+    passwordNueva: str
+
 # ============================================================================
 # AUTENTICACION
 # ============================================================================
@@ -308,7 +312,7 @@ def login(req: LoginRequest):
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT username, nombre_completo, rol FROM usuarios WHERE username = %s AND password = %s",
+                "SELECT username, nombre_completo, rol, forzar_cambio_password FROM usuarios WHERE username = %s AND password = %s",
                 (username, req.password)
             )
             user = cursor.fetchone()
@@ -317,11 +321,30 @@ def login(req: LoginRequest):
                     "username": user["username"],
                     "nombreCompleto": user["nombre_completo"],
                     "rol": user["rol"],
-                    "token": ""
+                    "token": "",
+                    "forzarCambioPassword": bool(user["forzar_cambio_password"])
                 }
             raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     finally:
         connection.close()
+
+@app.post("/cambiar-password")
+def cambiar_password(req: CambiarPasswordRequest):
+    if not req.passwordNueva or len(req.passwordNueva.strip()) < 4:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 4 caracteres")
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE usuarios SET password = %s, forzar_cambio_password = 0 WHERE username = %s",
+                (req.passwordNueva.strip(), req.username.strip().lower())
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            connection.commit()
+    finally:
+        connection.close()
+    return {"status": "ok"}
 
 # ============================================================================
 # TICKETS

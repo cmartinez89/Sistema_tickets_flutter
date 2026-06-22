@@ -26,6 +26,99 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<bool> _mostrarDialogoCambioPassword(String username) async {
+    final nuevaCtrl = TextEditingController();
+    final confirmarCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool guardando = false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setStateDialog) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Cambia tu contraseña', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Tu contraseña fue reseteada por el administrador. Por seguridad, elige una nueva contraseña para continuar.',
+                  style: TextStyle(fontSize: 13, color: Colors.blueGrey),
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: nuevaCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Nueva contraseña',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().length < 4) return 'Mínimo 4 caracteres';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: confirmarCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirmar contraseña',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock_reset_outlined),
+                  ),
+                  validator: (v) {
+                    if (v != nuevaCtrl.text) return 'Las contraseñas no coinciden';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            guardando
+                ? const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFDC0026),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setStateDialog(() => guardando = true);
+                      try {
+                        final tmpApi = api_service.ApiService(token: '');
+                        await tmpApi.cambiarPassword(username, nuevaCtrl.text.trim());
+                        if (ctx.mounted) Navigator.of(ctx).pop(true);
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                        setStateDialog(() => guardando = false);
+                      }
+                    },
+                    child: const Text('Guardar y continuar'),
+                  ),
+          ],
+        ),
+      ),
+    );
+
+    nuevaCtrl.dispose();
+    confirmarCtrl.dispose();
+    return result == true;
+  }
+
   void _mostrarOlvideContrasena() {
     showDialog(
       context: context,
@@ -80,6 +173,12 @@ class _LoginScreenState extends State<LoginScreen> {
           rol: data['rol'],
           token: data['token'] ?? '',
         );
+
+        if (data['forzarCambioPassword'] == true && mounted) {
+          final cambiada = await _mostrarDialogoCambioPassword(session.username);
+          if (!cambiada) return;
+        }
+
         await session.guardar();
 
         await NotificationService.solicitarPermiso();

@@ -67,6 +67,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - **Categorías de tickets**: dar de alta, editar y eliminar
 - **Áreas/Departamentos**: dar de alta, editar y eliminar
 - **Tipos de equipo**: dar de alta, editar y eliminar (Celular, Bastón, Radio, Tablet, Laptop, Desktop, Servidor)
+- **Gestión de usuarios**: reseteo de contraseñas desde el panel; al resetear se fuerza cambio en el próximo inicio de sesión
 
 ### Identidad visual
 - Colores corporativos Beta Systems: navy `#1A2B72`, rojo `#DC0026` y azul `#4E9FE0`
@@ -77,6 +78,7 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - Sesión guardada en `localStorage` con TTL de 7 días
 - Cierre de sesión explícito limpia la sesión de inmediato
 - Al retomar la app desde background, el WebSocket se reconecta y los tickets se actualizan automáticamente
+- **Cambio forzado de contraseña**: si el admin resetea la contraseña de un usuario, al hacer login se muestra un modal obligatorio para elegir una nueva antes de acceder al sistema
 
 ### Notificaciones en tiempo real
 - WebSocket permanente con reconexión automática
@@ -194,7 +196,8 @@ const String kWsUrl = 'ws://54.161.41.131:8000/ws';
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `POST` | `/login` | Autenticación |
+| `POST` | `/login` | Autenticación — retorna `forzarCambioPassword` si el admin reseteó la contraseña |
+| `POST` | `/cambiar-password` | Cambiar contraseña y limpiar flag de cambio forzado |
 | `GET/POST` | `/tickets` | Listar / crear ticket |
 | `PUT` | `/tickets/:id/status` | Cambiar estado |
 | `PUT` | `/tickets/:id/assign` | Reasignar técnico |

@@ -171,6 +171,17 @@ class ApiService {
     if (res.statusCode != 200) throw Exception('Error al eliminar usuario');
   }
 
+  // ── Auth ──────────────────────────────────────────────────────────────────────
+
+  Future<void> cambiarPassword(String username, String passwordNueva) async {
+    final res = await http.post(
+      Uri.parse('$kApiUrl/cambiar-password'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'username': username, 'passwordNueva': passwordNueva}),
+    ).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cambiar contraseña');
+  }
+
   // ── Chat ─────────────────────────────────────────────────────────────────────
 
   Future<List<ChatMessage>> fetchMensajes() async {
