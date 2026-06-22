@@ -23,6 +23,45 @@ class PantallaRespaldos extends StatefulWidget {
 }
 
 class _PantallaRespaldosState extends State<PantallaRespaldos> {
+  String _filtroAlerta = 'Todos';
+  String? _filtroArea;
+
+  static const _alertas = ['Todos', 'Sin respaldo', 'Al día', 'Atrasado', 'Crítico'];
+
+  List<String> get _areas {
+    final set = <String>{};
+    for (final eq in widget.inventario) {
+      final a = (eq.area?.isNotEmpty == true ? eq.area! : eq.ubicacion);
+      if (a.isNotEmpty) set.add(a);
+    }
+    return ['Todas', ...set.toList()..sort()];
+  }
+
+  List<Equipo> get _inventarioFiltrado {
+    return widget.inventario.where((eq) {
+      // Filtro área
+      if (_filtroArea != null && _filtroArea != 'Todas') {
+        final areaEq = eq.area?.isNotEmpty == true ? eq.area! : eq.ubicacion;
+        if (areaEq != _filtroArea) return false;
+      }
+      // Filtro alerta
+      if (_filtroAlerta != 'Todos') {
+        final dias = eq.diasUltimoRespaldo;
+        switch (_filtroAlerta) {
+          case 'Sin respaldo':
+            if (eq.ultimoRespaldo != null) return false;
+          case 'Al día':
+            if (dias == null || dias >= 7) return false;
+          case 'Atrasado':
+            if (dias == null || dias < 7 || dias >= 15) return false;
+          case 'Crítico':
+            if (dias == null || dias < 15) return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
   Future<void> _actualizar(Equipo eq, DateTime fecha) async {
     try {
       await widget.api.actualizarRespaldo(eq.id, fecha);
@@ -109,7 +148,49 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                   ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            // ── Filtros ──────────────────────────────────────────────────────
+            Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                SizedBox(
+                  width: 160,
+                  child: DropdownButtonFormField<String>(
+                    value: _filtroAlerta,
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Estado',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    items: _alertas.map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 13)))).toList(),
+                    onChanged: (v) => setState(() => _filtroAlerta = v!),
+                  ),
+                ),
+                SizedBox(
+                  width: 170,
+                  child: DropdownButtonFormField<String>(
+                    value: _filtroArea ?? 'Todas',
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Área',
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    items: _areas.map((a) => DropdownMenuItem(value: a, child: Text(a, style: const TextStyle(fontSize: 13)))).toList(),
+                    onChanged: (v) => setState(() => _filtroArea = v == 'Todas' ? null : v),
+                  ),
+                ),
+                if (_filtroAlerta != 'Todos' || (_filtroArea != null && _filtroArea != 'Todas'))
+                  TextButton.icon(
+                    onPressed: () => setState(() { _filtroAlerta = 'Todos'; _filtroArea = null; }),
+                    icon: const Icon(Icons.clear, size: 16),
+                    label: const Text('Limpiar', style: TextStyle(fontSize: 13)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -129,11 +210,24 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                   }
 
                   // VISTA MOVIL (TARJETAS ESPACIADAS EN VENTANAS CHICAS)
+                  final lista = _inventarioFiltrado;
                   if (constraints.maxWidth < 750) {
+                    if (lista.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey.shade300),
+                            const SizedBox(height: 12),
+                            Text('Sin resultados', style: TextStyle(color: Colors.grey.shade400)),
+                          ],
+                        ),
+                      );
+                    }
                     return ListView.builder(
-                      itemCount: widget.inventario.length,
+                      itemCount: lista.length,
                       itemBuilder: (context, index) {
-                        final eq = widget.inventario[index];
+                        final eq = lista[index];
                         final dias = eq.diasUltimoRespaldo;
 
                         return Card(
@@ -238,7 +332,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                               DataColumn(label: Text('Último respaldo', style: TextStyle(fontWeight: FontWeight.bold))),
                               DataColumn(label: Text('Días', style: TextStyle(fontWeight: FontWeight.bold))),
                             ],
-                            rows: widget.inventario.map((eq) {
+                            rows: lista.map((eq) {
                               final dias = eq.diasUltimoRespaldo;
 
                               return DataRow(

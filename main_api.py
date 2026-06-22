@@ -6,6 +6,7 @@ import pymysql
 import json
 import os
 import re
+import requests as _requests
 from datetime import datetime, date
 
 # Cargar .env si existe (para ANTHROPIC_API_KEY y otras vars)
@@ -40,6 +41,31 @@ _SERVICE_ACCOUNT = os.path.join(os.path.dirname(__file__), "soporte-bsm-firebase
 if not firebase_admin._apps and os.path.exists(_SERVICE_ACCOUNT):
     _cred = credentials.Certificate(_SERVICE_ACCOUNT)
     firebase_admin.initialize_app(_cred)
+
+_TELEGRAM_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+
+def _notify_telegram_usuario(username: str, mensaje: str):
+    """Envía mensaje de Telegram al usuario si tiene telegram_id registrado. Silencioso si falla."""
+    if not _TELEGRAM_TOKEN:
+        return
+    try:
+        conn = get_db_connection()
+        try:
+            with conn.cursor() as c:
+                c.execute("SELECT telegram_id FROM usuarios WHERE username = %s", (username,))
+                row = c.fetchone()
+        finally:
+            conn.close()
+        tid = row.get('telegram_id') if row else None
+        if not tid:
+            return
+        _requests.post(
+            f"https://api.telegram.org/bot{_TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": tid, "text": mensaje, "parse_mode": "Markdown"},
+            timeout=5,
+        )
+    except Exception:
+        pass
 
 def _send_fcm(username: str, title: str, body: str):
     """Envía notificación FCM al token registrado de un usuario. Silencioso si falla."""
@@ -431,12 +457,16 @@ async def escalar_ticket(ticket_id: str, req: TicketEscalarRequest):
 
 @app.put("/tickets/{ticket_id}/resolve")
 async def resolve_ticket(ticket_id: str, req: TicketResolverRequest):
+    ticket_usuario = None
+    ticket_descripcion = None
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT estado FROM tickets WHERE id = %s", (ticket_id,))
+            cursor.execute("SELECT estado, usuario, descripcion FROM tickets WHERE id = %s", (ticket_id,))
             row = cursor.fetchone()
             estado_anterior = row['estado'] if row else None
+            ticket_usuario = row['usuario'] if row else None
+            ticket_descripcion = row['descripcion'] if row else ''
             cursor.execute(
                 """UPDATE tickets SET estado = %s, causa_raiz = %s, como_se_resolvio = %s,
                    pruebas_realizadas = %s, validado_con = %s,
@@ -452,6 +482,16 @@ async def resolve_ticket(ticket_id: str, req: TicketResolverRequest):
     finally:
         connection.close()
     await manager.broadcast({"tipo": "tickets", "accion": "resuelto", "id": ticket_id})
+    # Notificar al usuario por Telegram si tiene cuenta vinculada
+    if ticket_usuario and req.estado == 'Resuelto':
+        msg = (
+            f"✅ *Tu ticket fue resuelto*\n\n"
+            f"🎫 ID: *{ticket_id}*\n"
+            f"📋 {ticket_descripcion}\n\n"
+            f"✔️ *Solución:* {req.comoSeResolvio or 'Ver en el sistema'}\n"
+            f"👤 *Validado con:* {req.validadoCon or '—'}"
+        )
+        _notify_telegram_usuario(ticket_usuario, msg)
     return {"status": "success"}
 
 @app.put("/tickets/{ticket_id}/assign")
