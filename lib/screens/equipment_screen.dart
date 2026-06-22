@@ -422,18 +422,18 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     ],
                   ),
                 ),
-                if (widget.session.rol == 'Admin')
-                  ElevatedButton.icon(
-                    onPressed: () => abrirDialogoNuevoEquipo(
-                      context: context,
-                      api: widget.api,
-                      onRefresh: widget.onRefresh,
-                      tiposDisponibles: _tiposEquipo,
-                    ),
-                    icon: const Icon(Icons.computer_rounded, size: 16),
-                    label: const Text('Alta Equipo'),
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
+                ElevatedButton.icon(
+                  onPressed: () => abrirDialogoNuevoEquipo(
+                    context: context,
+                    api: widget.api,
+                    onRefresh: widget.onRefresh,
+                    tiposDisponibles: _tiposEquipo,
+                    areas: uniqueAreas,
                   ),
+                  icon: const Icon(Icons.computer_rounded, size: 16),
+                  label: const Text('Alta Equipo'),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
+                ),
               ],
             ),
             const SizedBox(height: 10),

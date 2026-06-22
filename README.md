@@ -10,10 +10,12 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - Registro de reportes con prioridad (Alta / Media / Baja), categoría y área/departamento
 - Flujo de estados: **Pendiente → En Proceso → Escalado → Resuelto**
 - **Escalado**: al escalar se registra a quién y el motivo
-- **Resolución inteligente**: distingue Incidencia (causa raíz, solución, pruebas, validación) vs Servicio (solo validación)
-- Adjuntar imagen opcional al resolver un ticket
+- **Resolución inteligente**: distingue Incidencia (causa raíz, solución, pruebas, validación), Servicio (solo validación) y **Mantenimiento** (preventivo/correctivo; si correctivo registra qué se corrigió; permite adjuntar múltiples fotos)
+- Adjuntar imagen(es) al resolver un ticket (múltiples para Mantenimiento)
 - **Historial de tiempos por estado**: registro de cuánto tiempo duró el ticket en cada estado (en horas)
 - Fecha de creación y tiempo transcurrido visible en cada tarjeta
+- **Búsqueda global** en tiempo real: busca por ID, usuario, descripción, área, categoría o técnico asignado
+- **Filtros de fecha** (Desde / Hasta) combinables con los demás filtros
 - **Filtros** por estado (Activos/Resueltos/Todos), área y prioridad
 - Chip de prioridad visible en cada tarjeta de ticket
 - **Auto-asignación**: técnicos se asignan automáticamente al crear tickets; Admin puede asignar libremente o dejar sin asignar
@@ -32,7 +34,8 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - **Folio de activo auto-generado** al registrar (ACT-YYYY-NNN)
 - **Folio de responsiva auto-generado** al asignar (RES-YYYY-NNN)
 - Dirección MAC para Celular, Laptop, Desktop y Servidor
-- Campo de área/ubicación del equipo
+- Campo de área/ubicación con **selector de área** (dropdown) al registrar equipo
+- **Alta de equipo disponible para Técnicos** (no solo Admin)
 - **Impresión de Carta Responsiva** desde el navegador (nueva ventana con formato para imprimir)
 - **Gestión de obsolescencia**: equipos ≥ 5 años se marcan como "Fuera de Servicio" y solo pueden venderse
 - **Registrar venta**: precio y fecha de venta de equipos dados de baja
@@ -44,6 +47,9 @@ Sistema interno de gestión de soporte técnico, inventario de equipos, control 
 - Seguimiento de último respaldo por equipo con alerta visual:
   - Amarillo: sin respaldo registrado
   - Rojo: más de 15 días sin respaldo
+- **Búsqueda por texto** (modelo, marca o nombre de empleado)
+- **Filtros** por estado de alerta y área
+- **Alta de equipo** disponible para Técnicos desde esta pantalla
 
 ### Dashboard
 - Resumen de tickets: Pendientes, En Proceso, Resueltos, Prioridad Alta, **Escalados**

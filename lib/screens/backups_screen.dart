@@ -25,8 +25,15 @@ class PantallaRespaldos extends StatefulWidget {
 class _PantallaRespaldosState extends State<PantallaRespaldos> {
   String _filtroAlerta = 'Todos';
   String? _filtroArea;
+  final _busquedaCtrl = TextEditingController();
 
   static const _alertas = ['Todos', 'Sin respaldo', 'Al día', 'Atrasado', 'Crítico'];
+
+  @override
+  void dispose() {
+    _busquedaCtrl.dispose();
+    super.dispose();
+  }
 
   List<String> get _areas {
     final set = <String>{};
@@ -38,7 +45,15 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
   }
 
   List<Equipo> get _inventarioFiltrado {
+    final busq = _busquedaCtrl.text.toLowerCase().trim();
     return widget.inventario.where((eq) {
+      // Texto búsqueda
+      if (busq.isNotEmpty) {
+        final nombre = (eq.empleadoAsignado ?? '').toLowerCase();
+        final modelo = eq.modelo.toLowerCase();
+        final marca = eq.marca.toLowerCase();
+        if (!nombre.contains(busq) && !modelo.contains(busq) && !marca.contains(busq)) return false;
+      }
       // Filtro área
       if (_filtroArea != null && _filtroArea != 'Todas') {
         final areaEq = eq.area?.isNotEmpty == true ? eq.area! : eq.ubicacion;
@@ -132,24 +147,41 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                     ),
                   ],
                 ),
-                if (widget.session.rol == 'Admin')
-                  ElevatedButton.icon(
-                    onPressed: () => abrirDialogoNuevoEquipo(
-                      context: context,
-                      api: widget.api,
-                      onRefresh: widget.onRefresh,
-                    ),
-                    icon: const Icon(Icons.add_to_photos_rounded, size: 16),
-                    label: const Text('Alta Equipo'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1A2B72),
-                      foregroundColor: Colors.white,
-                    ),
+                ElevatedButton.icon(
+                  onPressed: () => abrirDialogoNuevoEquipo(
+                    context: context,
+                    api: widget.api,
+                    onRefresh: widget.onRefresh,
+                    areas: _areas.where((a) => a != 'Todas').toList(),
                   ),
+                  icon: const Icon(Icons.add_to_photos_rounded, size: 16),
+                  label: const Text('Alta Equipo'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A2B72),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             // ── Filtros ──────────────────────────────────────────────────────
+            TextField(
+              controller: _busquedaCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Buscar por modelo, marca o nombre de empleado...',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                suffixIcon: _busquedaCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () { _busquedaCtrl.clear(); setState(() {}); })
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 10,
               runSpacing: 8,
@@ -182,9 +214,13 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                     onChanged: (v) => setState(() => _filtroArea = v == 'Todas' ? null : v),
                   ),
                 ),
-                if (_filtroAlerta != 'Todos' || (_filtroArea != null && _filtroArea != 'Todas'))
+                if (_filtroAlerta != 'Todos' || (_filtroArea != null && _filtroArea != 'Todas') || _busquedaCtrl.text.isNotEmpty)
                   TextButton.icon(
-                    onPressed: () => setState(() { _filtroAlerta = 'Todos'; _filtroArea = null; }),
+                    onPressed: () => setState(() {
+                      _filtroAlerta = 'Todos';
+                      _filtroArea = null;
+                      _busquedaCtrl.clear();
+                    }),
                     icon: const Icon(Icons.clear, size: 16),
                     label: const Text('Limpiar', style: TextStyle(fontSize: 13)),
                   ),

@@ -7,6 +7,7 @@ void abrirDialogoNuevoEquipo({
   required ApiService api,
   required VoidCallback onRefresh,
   List<String> tiposDisponibles = const ['Laptop', 'Desktop', 'Servidor', 'Celular', 'Bastón', 'Radio', 'Tablet'],
+  List<String> areas = const [],
 }) {
   final formKey = GlobalKey<FormState>();
   final marcaCtrl = TextEditingController();
@@ -18,6 +19,7 @@ void abrirDialogoNuevoEquipo({
   final specsCtrl = TextEditingController();
   final ubicacionCtrl = TextEditingController(text: 'Beta');
   final areaCtrl = TextEditingController();
+  String? areaSeleccionada;
   final macCtrl = TextEditingController();
   final anydeskCtrl = TextEditingController();
   final rustdeskCtrl = TextEditingController();
@@ -137,10 +139,18 @@ void abrirDialogoNuevoEquipo({
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: TextFormField(
-                          controller: areaCtrl,
-                          decoration: const InputDecoration(labelText: 'Área / Departamento', border: OutlineInputBorder()),
-                        ),
+                        child: areas.isNotEmpty
+                          ? DropdownButtonFormField<String>(
+                              value: areaSeleccionada,
+                              decoration: const InputDecoration(labelText: 'Área / Departamento', border: OutlineInputBorder()),
+                              hint: const Text('Seleccionar área'),
+                              items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
+                              onChanged: (v) => setDs(() => areaSeleccionada = v),
+                            )
+                          : TextFormField(
+                              controller: areaCtrl,
+                              decoration: const InputDecoration(labelText: 'Área / Departamento', border: OutlineInputBorder()),
+                            ),
                       ),
                     ],
                   ),
@@ -211,7 +221,9 @@ void abrirDialogoNuevoEquipo({
                       specifications: specsCtrl.text.trim(),
                       estatus: 'Disponible',
                       ubicacion: ubicacionCtrl.text.trim().isEmpty ? 'Beta' : ubicacionCtrl.text.trim(),
-                      area: areaCtrl.text.trim().isEmpty ? null : areaCtrl.text.trim(),
+                      area: areas.isNotEmpty
+                          ? areaSeleccionada
+                          : (areaCtrl.text.trim().isEmpty ? null : areaCtrl.text.trim()),
                       macAddress: macCtrl.text.trim().isEmpty ? null : macCtrl.text.trim(),
                       anydesk: anydeskCtrl.text.trim(),
                       rustdesk: rustdeskCtrl.text.trim(),

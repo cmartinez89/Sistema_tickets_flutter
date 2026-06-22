@@ -53,6 +53,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
   List<Map<String, dynamic>> _categorias = [];
   List<Map<String, dynamic>> _areas = [];
+  final _busquedaCtrl = TextEditingController();
+  DateTime? _desde;
+  DateTime? _hasta;
 
   @override
   void initState() {
@@ -73,6 +76,14 @@ class _TicketsScreenState extends State<TicketsScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _usuarioCtrl.dispose();
+    _descCtrl.dispose();
+    _busquedaCtrl.dispose();
+    super.dispose();
   }
 
   List<String> get _kTecnicos =>
@@ -142,6 +153,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
     final motivoEscaladoCtrl =
         TextEditingController(text: t.motivoEscalado ?? '');
     String? imagenBase64;
+    String tipoMantenimiento = 'Preventivo';
+    final queCorrigioCtrl = TextEditingController();
+    List<String> imagenesMantenimiento = [];
     bool guardando = false;
     List<Map<String, dynamic>> historial = [];
     bool loadingHistorial = true;
@@ -395,6 +409,11 @@ class _TicketsScreenState extends State<TicketsScreen> {
                               label: Text('Servicio'),
                               icon: Icon(Icons.build_circle_rounded,
                                   size: 14)),
+                          ButtonSegment(
+                              value: 'Mantenimiento',
+                              label: Text('Mant.'),
+                              icon: Icon(Icons.handyman_rounded,
+                                  size: 14)),
                         ],
                         selected: {tipoTicket},
                         onSelectionChanged: (s) =>
@@ -429,6 +448,38 @@ class _TicketsScreenState extends State<TicketsScreen> {
                         ),
                         const SizedBox(height: 10),
                       ],
+                      if (tipoTicket == 'Mantenimiento') ...[
+                        Row(
+                          children: [
+                            const Text('Tipo:', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+                            const SizedBox(width: 12),
+                            ChoiceChip(
+                              label: const Text('Preventivo'),
+                              selected: tipoMantenimiento == 'Preventivo',
+                              onSelected: (_) => setDs(() => tipoMantenimiento = 'Preventivo'),
+                              selectedColor: Colors.green.shade100,
+                            ),
+                            const SizedBox(width: 8),
+                            ChoiceChip(
+                              label: const Text('Correctivo'),
+                              selected: tipoMantenimiento == 'Correctivo',
+                              onSelected: (_) => setDs(() => tipoMantenimiento = 'Correctivo'),
+                              selectedColor: Colors.orange.shade100,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        if (tipoMantenimiento == 'Correctivo') ...[
+                          TextFormField(
+                            controller: queCorrigioCtrl,
+                            decoration: const InputDecoration(
+                                labelText: '¿Qué se corrigió?',
+                                border: OutlineInputBorder()),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                      ],
                       TextFormField(
                         controller: validadoCtrl,
                         decoration: const InputDecoration(
@@ -437,35 +488,52 @@ class _TicketsScreenState extends State<TicketsScreen> {
                       ),
                       const SizedBox(height: 10),
                       // Image picker
-                      Row(
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: () async {
-                              final img =
-                                  await _pickImageBase64();
-                              if (img != null) {
-                                setDs(() => imagenBase64 = img);
-                              }
-                            },
-                            icon: const Icon(
-                                Icons.image_rounded,
-                                size: 16),
-                            label: Text(imagenBase64 != null
-                                ? 'Imagen adjunta ✓'
-                                : 'Adjuntar imagen (opcional)'),
+                      if (tipoTicket == 'Mantenimiento') ...[
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            final img = await _pickImageBase64();
+                            if (img != null) setDs(() => imagenesMantenimiento.add(img));
+                          },
+                          icon: const Icon(Icons.add_photo_alternate_rounded, size: 16),
+                          label: Text('Agregar foto${imagenesMantenimiento.isNotEmpty ? ' (${imagenesMantenimiento.length})' : ''}'),
+                        ),
+                        if (imagenesMantenimiento.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: imagenesMantenimiento.asMap().entries.map((e) =>
+                              Chip(
+                                label: Text('Foto ${e.key + 1}', style: const TextStyle(fontSize: 11)),
+                                deleteIcon: const Icon(Icons.close, size: 14),
+                                onDeleted: () => setDs(() => imagenesMantenimiento.removeAt(e.key)),
+                              )
+                            ).toList(),
                           ),
-                          if (imagenBase64 != null) ...[
-                            const SizedBox(width: 8),
-                            IconButton(
-                              icon: const Icon(Icons.close,
-                                  size: 16),
-                              onPressed: () =>
-                                  setDs(() => imagenBase64 = null),
-                              tooltip: 'Quitar imagen',
-                            ),
-                          ],
                         ],
-                      ),
+                      ] else
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final img = await _pickImageBase64();
+                                if (img != null) setDs(() => imagenBase64 = img);
+                              },
+                              icon: const Icon(Icons.image_rounded, size: 16),
+                              label: Text(imagenBase64 != null
+                                  ? 'Imagen adjunta ✓'
+                                  : 'Adjuntar imagen (opcional)'),
+                            ),
+                            if (imagenBase64 != null) ...[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.close, size: 16),
+                                onPressed: () => setDs(() => imagenBase64 = null),
+                                tooltip: 'Quitar imagen',
+                              ),
+                            ],
+                          ],
+                        ),
                     ],
                   ],
                 ),
@@ -489,15 +557,20 @@ class _TicketsScreenState extends State<TicketsScreen> {
                           if (nuevoEstado == 'Resuelto') {
                             await widget.api.resolverTicket(
                               t.id,
-                              causaRaiz: causaCtrl.text.trim(),
-                              comoSeResolvio:
-                                  resolverCtrl.text.trim(),
+                              causaRaiz: tipoTicket == 'Mantenimiento'
+                                  ? tipoMantenimiento
+                                  : causaCtrl.text.trim(),
+                              comoSeResolvio: tipoTicket == 'Mantenimiento'
+                                  ? (tipoMantenimiento == 'Correctivo' ? queCorrigioCtrl.text.trim() : '')
+                                  : resolverCtrl.text.trim(),
                               pruebasRealizadas:
                                   pruebasCtrl.text.trim(),
                               validadoCon:
                                   validadoCtrl.text.trim(),
                               tipoTicket: tipoTicket,
-                              imagenResolucion: imagenBase64,
+                              imagenResolucion: tipoTicket == 'Mantenimiento'
+                                  ? (imagenesMantenimiento.isEmpty ? null : jsonEncode(imagenesMantenimiento))
+                                  : imagenBase64,
                             );
                           } else if (nuevoEstado == 'Escalado') {
                             await widget.api.escalarTicket(
@@ -759,6 +832,25 @@ class _TicketsScreenState extends State<TicketsScreen> {
           .where((t) => t.prioridad == _filtroPrioridad)
           .toList();
     }
+    final _busq = _busquedaCtrl.text.toLowerCase().trim();
+    if (_busq.isNotEmpty) {
+      lista = lista.where((t) =>
+        t.id.toLowerCase().contains(_busq) ||
+        t.usuario.toLowerCase().contains(_busq) ||
+        t.descripcion.toLowerCase().contains(_busq) ||
+        t.departamento.toLowerCase().contains(_busq) ||
+        (t.area?.toLowerCase().contains(_busq) ?? false) ||
+        (t.categoria?.toLowerCase().contains(_busq) ?? false) ||
+        t.asignadoA.toLowerCase().contains(_busq)
+      ).toList();
+    }
+    if (_desde != null) {
+      lista = lista.where((t) => !t.fecha.isBefore(_desde!)).toList();
+    }
+    if (_hasta != null) {
+      final hastaFin = _hasta!.add(const Duration(days: 1));
+      lista = lista.where((t) => t.fecha.isBefore(hastaFin)).toList();
+    }
 
     final areaOpciones = {
       ..._areas.map((a) => a['nombre']?.toString() ?? ''),
@@ -789,6 +881,23 @@ class _TicketsScreenState extends State<TicketsScreen> {
                   label: const Text('Nuevo'),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _busquedaCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Buscar por ID, usuario, descripción, área...',
+                prefixIcon: const Icon(Icons.search, size: 18),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                suffixIcon: _busquedaCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () { _busquedaCtrl.clear(); setState(() {}); })
+                    : null,
+              ),
             ),
             const SizedBox(height: 8),
             // Filters row
@@ -861,11 +970,62 @@ class _TicketsScreenState extends State<TicketsScreen> {
                       height: 1,
                       color: Colors.blueGrey.shade200),
                 ),
-                if (_filtroArea != null || _filtroPrioridad != null)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final d = await showDatePicker(
+                      context: context,
+                      initialDate: _desde ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (d != null) setState(() => _desde = d);
+                  },
+                  icon: const Icon(Icons.calendar_today_rounded, size: 14),
+                  label: Text(
+                    _desde == null
+                        ? 'Desde'
+                        : '${_desde!.day.toString().padLeft(2, '0')}/${_desde!.month.toString().padLeft(2, '0')}/${_desde!.year}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: _desde != null ? Colors.blue.shade300 : Colors.grey.shade300),
+                    foregroundColor: _desde != null ? Colors.blue.shade700 : Colors.grey.shade600,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final d = await showDatePicker(
+                      context: context,
+                      initialDate: _hasta ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (d != null) setState(() => _hasta = d);
+                  },
+                  icon: const Icon(Icons.calendar_month_rounded, size: 14),
+                  label: Text(
+                    _hasta == null
+                        ? 'Hasta'
+                        : '${_hasta!.day.toString().padLeft(2, '0')}/${_hasta!.month.toString().padLeft(2, '0')}/${_hasta!.year}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: _hasta != null ? Colors.blue.shade300 : Colors.grey.shade300),
+                    foregroundColor: _hasta != null ? Colors.blue.shade700 : Colors.grey.shade600,
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                ),
+                if (_filtroArea != null || _filtroPrioridad != null || _desde != null || _hasta != null || _busquedaCtrl.text.isNotEmpty)
                   TextButton.icon(
                     onPressed: () => setState(() {
                       _filtroArea = null;
                       _filtroPrioridad = null;
+                      _desde = null;
+                      _hasta = null;
+                      _busquedaCtrl.clear();
                     }),
                     icon: const Icon(Icons.clear, size: 14),
                     label: const Text('Limpiar',
