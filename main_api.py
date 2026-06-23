@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -7,7 +8,9 @@ import json
 import os
 import re
 import requests as _requests
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
+import jwt as pyjwt
+from passlib.context import CryptContext
 
 # Cargar .env si existe (para ANTHROPIC_API_KEY y otras vars)
 _env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -20,6 +23,25 @@ if os.path.exists(_env_path):
                 os.environ.setdefault(_k.strip(), _v.strip())
 import firebase_admin
 from firebase_admin import credentials, messaging
+
+# ── Seguridad ─────────────────────────────────────────────────────────────────
+_jwt_secret = os.environ.get('JWT_SECRET_KEY', '')
+if not _jwt_secret:
+    raise RuntimeError("JWT_SECRET_KEY no configurada en .env")
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_bearer = HTTPBearer(auto_error=False)
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Autenticación requerida")
+    try:
+        payload = pyjwt.decode(credentials.credentials, _jwt_secret, algorithms=["HS256"])
+        return payload
+    except pyjwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Sesión expirada, inicia sesión nuevamente")
+    except pyjwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token inválido")
 try:
     import anthropic as _anthropic
     _ANTHROPIC_AVAILABLE = True
@@ -92,7 +114,7 @@ def get_db_connection():
     return pymysql.connect(
         host='localhost',
         user='admin_soporte',
-        password='B47e68t10a',
+        password=os.environ.get('DB_PASSWORD', ''),
         database='soporte_beta',
         cursorclass=pymysql.cursors.DictCursor
     )
@@ -206,7 +228,12 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str = ""):
+    try:
+        pyjwt.decode(token, _jwt_secret, algorithms=["HS256"])
+    except pyjwt.PyJWTError:
+        await websocket.close(code=4001)
+        return
     await manager.connect(websocket)
     try:
         while True:
@@ -338,32 +365,63 @@ def login(req: LoginRequest):
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT username, nombre_completo, rol, forzar_cambio_password FROM usuarios WHERE username = %s AND password = %s",
-                (username, req.password)
+                "SELECT username, nombre_completo, rol, password, forzar_cambio_password FROM usuarios WHERE username = %s",
+                (username,)
             )
             user = cursor.fetchone()
-            if user:
-                return {
+            if not user:
+                raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+            stored_pw = user["password"] or ""
+            password_ok = False
+
+            # Verificar bcrypt
+            if stored_pw.startswith("$2b$") or stored_pw.startswith("$2a$"):
+                password_ok = _pwd_context.verify(req.password, stored_pw)
+            else:
+                # Contraseña en texto plano (migración): verificar y actualizar a bcrypt
+                if req.password == stored_pw:
+                    password_ok = True
+                    hashed = _pwd_context.hash(req.password)
+                    cursor.execute("UPDATE usuarios SET password = %s WHERE username = %s", (hashed, username))
+                    connection.commit()
+
+            if not password_ok:
+                raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+
+            token = pyjwt.encode(
+                {
                     "username": user["username"],
-                    "nombreCompleto": user["nombre_completo"],
                     "rol": user["rol"],
-                    "token": "",
-                    "forzarCambioPassword": bool(user["forzar_cambio_password"])
-                }
-            raise HTTPException(status_code=401, detail="Credenciales incorrectas")
+                    "nombreCompleto": user["nombre_completo"],
+                    "exp": datetime.now() + timedelta(days=7),
+                },
+                _jwt_secret,
+                algorithm="HS256",
+            )
+            return {
+                "username": user["username"],
+                "nombreCompleto": user["nombre_completo"],
+                "rol": user["rol"],
+                "token": token,
+                "forzarCambioPassword": bool(user["forzar_cambio_password"])
+            }
     finally:
         connection.close()
 
 @app.post("/cambiar-password")
-def cambiar_password(req: CambiarPasswordRequest):
-    if not req.passwordNueva or len(req.passwordNueva.strip()) < 4:
-        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 4 caracteres")
+def cambiar_password(req: CambiarPasswordRequest, current_user: dict = Depends(get_current_user)):
+    if req.username.strip().lower() != current_user["username"]:
+        raise HTTPException(status_code=403, detail="Solo puedes cambiar tu propia contraseña")
+    if not req.passwordNueva or len(req.passwordNueva.strip()) < 6:
+        raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
+    hashed = _pwd_context.hash(req.passwordNueva.strip())
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE usuarios SET password = %s, forzar_cambio_password = 0 WHERE username = %s",
-                (req.passwordNueva.strip(), req.username.strip().lower())
+                (hashed, req.username.strip().lower())
             )
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -376,7 +434,7 @@ def cambiar_password(req: CambiarPasswordRequest):
 # TICKETS
 # ============================================================================
 @app.get("/tickets")
-def get_tickets():
+def get_tickets(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -387,7 +445,7 @@ def get_tickets():
         connection.close()
 
 @app.post("/tickets")
-async def create_ticket(req: TicketCreateRequest):
+async def create_ticket(req: TicketCreateRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -419,7 +477,7 @@ async def create_ticket(req: TicketCreateRequest):
     return _build_ticket(t)
 
 @app.put("/tickets/{ticket_id}/status")
-async def update_ticket_status(ticket_id: str, req: TicketEstatusRequest):
+async def update_ticket_status(ticket_id: str, req: TicketEstatusRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -436,7 +494,7 @@ async def update_ticket_status(ticket_id: str, req: TicketEstatusRequest):
     return {"status": "success"}
 
 @app.put("/tickets/{ticket_id}/escalar")
-async def escalar_ticket(ticket_id: str, req: TicketEscalarRequest):
+async def escalar_ticket(ticket_id: str, req: TicketEscalarRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -456,7 +514,7 @@ async def escalar_ticket(ticket_id: str, req: TicketEscalarRequest):
     return {"status": "success"}
 
 @app.put("/tickets/{ticket_id}/resolve")
-async def resolve_ticket(ticket_id: str, req: TicketResolverRequest):
+async def resolve_ticket(ticket_id: str, req: TicketResolverRequest, current_user: dict = Depends(get_current_user)):
     ticket_usuario = None
     ticket_descripcion = None
     connection = get_db_connection()
@@ -495,7 +553,7 @@ async def resolve_ticket(ticket_id: str, req: TicketResolverRequest):
     return {"status": "success"}
 
 @app.put("/tickets/{ticket_id}/assign")
-async def reassign_ticket(ticket_id: str, req: TicketReasignarRequest):
+async def reassign_ticket(ticket_id: str, req: TicketReasignarRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -508,7 +566,7 @@ async def reassign_ticket(ticket_id: str, req: TicketReasignarRequest):
     return {"status": "success"}
 
 @app.get("/tickets/{ticket_id}/historial")
-def get_ticket_historial(ticket_id: str):
+def get_ticket_historial(ticket_id: str, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -531,7 +589,7 @@ def get_ticket_historial(ticket_id: str):
 # EQUIPOS
 # ============================================================================
 @app.get("/equipos")
-def get_equipos():
+def get_equipos(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -542,7 +600,7 @@ def get_equipos():
         connection.close()
 
 @app.post("/equipos")
-async def create_equipo(req: EquipoCreateRequest):
+async def create_equipo(req: EquipoCreateRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -569,7 +627,7 @@ async def create_equipo(req: EquipoCreateRequest):
     return _build_equipo(e)
 
 @app.put("/equipos/{equipo_id}/assign")
-async def assign_equipo(equipo_id: str, req: EquipoAsignarRequest):
+async def assign_equipo(equipo_id: str, req: EquipoAsignarRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -586,7 +644,7 @@ async def assign_equipo(equipo_id: str, req: EquipoAsignarRequest):
     return {"status": "success", "folioResponsiva": folio_responsiva}
 
 @app.put("/equipos/{equipo_id}/release")
-async def release_equipo(equipo_id: str, req: EquipoLiberarRequest):
+async def release_equipo(equipo_id: str, req: EquipoLiberarRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -602,7 +660,7 @@ async def release_equipo(equipo_id: str, req: EquipoLiberarRequest):
     return {"status": "success"}
 
 @app.put("/equipos/{equipo_id}/backup")
-async def update_equipo_backup(equipo_id: str, req: EquipoBackupRequest):
+async def update_equipo_backup(equipo_id: str, req: EquipoBackupRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -617,7 +675,7 @@ async def update_equipo_backup(equipo_id: str, req: EquipoBackupRequest):
     return {"status": "success"}
 
 @app.put("/equipos/{equipo_id}/vender")
-async def vender_equipo(equipo_id: str, req: EquipoVenderRequest):
+async def vender_equipo(equipo_id: str, req: EquipoVenderRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -639,7 +697,7 @@ async def vender_equipo(equipo_id: str, req: EquipoVenderRequest):
 
 # ── Categorías ────────────────────────────────────────────────────────────────
 @app.get("/categorias")
-def get_categorias():
+def get_categorias(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -649,7 +707,7 @@ def get_categorias():
         connection.close()
 
 @app.post("/categorias", status_code=201)
-async def create_categoria(req: CatalogoItemRequest):
+async def create_categoria(req: CatalogoItemRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -661,7 +719,7 @@ async def create_categoria(req: CatalogoItemRequest):
     return {"id": new_id, "nombre": req.nombre.strip()}
 
 @app.put("/categorias/{cat_id}")
-async def update_categoria(cat_id: int, req: CatalogoItemRequest):
+async def update_categoria(cat_id: int, req: CatalogoItemRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -674,7 +732,7 @@ async def update_categoria(cat_id: int, req: CatalogoItemRequest):
     return {"status": "success"}
 
 @app.delete("/categorias/{cat_id}")
-async def delete_categoria(cat_id: int):
+async def delete_categoria(cat_id: int, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -688,7 +746,7 @@ async def delete_categoria(cat_id: int):
 
 # ── Áreas ─────────────────────────────────────────────────────────────────────
 @app.get("/areas")
-def get_areas():
+def get_areas(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -698,7 +756,7 @@ def get_areas():
         connection.close()
 
 @app.post("/areas", status_code=201)
-async def create_area(req: CatalogoItemRequest):
+async def create_area(req: CatalogoItemRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -710,7 +768,7 @@ async def create_area(req: CatalogoItemRequest):
     return {"id": new_id, "nombre": req.nombre.strip()}
 
 @app.put("/areas/{area_id}")
-async def update_area(area_id: int, req: CatalogoItemRequest):
+async def update_area(area_id: int, req: CatalogoItemRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -723,7 +781,7 @@ async def update_area(area_id: int, req: CatalogoItemRequest):
     return {"status": "success"}
 
 @app.delete("/areas/{area_id}")
-async def delete_area(area_id: int):
+async def delete_area(area_id: int, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -737,7 +795,7 @@ async def delete_area(area_id: int):
 
 # ── Tipos de equipo ───────────────────────────────────────────────────────────
 @app.get("/tipos-equipo")
-def get_tipos_equipo():
+def get_tipos_equipo(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -747,7 +805,7 @@ def get_tipos_equipo():
         connection.close()
 
 @app.post("/tipos-equipo", status_code=201)
-async def create_tipo_equipo(req: CatalogoItemRequest):
+async def create_tipo_equipo(req: CatalogoItemRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -759,7 +817,7 @@ async def create_tipo_equipo(req: CatalogoItemRequest):
     return {"id": new_id, "nombre": req.nombre.strip()}
 
 @app.put("/tipos-equipo/{tipo_id}")
-async def update_tipo_equipo(tipo_id: int, req: CatalogoItemRequest):
+async def update_tipo_equipo(tipo_id: int, req: CatalogoItemRequest, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -772,7 +830,7 @@ async def update_tipo_equipo(tipo_id: int, req: CatalogoItemRequest):
     return {"status": "success"}
 
 @app.delete("/tipos-equipo/{tipo_id}")
-async def delete_tipo_equipo(tipo_id: int):
+async def delete_tipo_equipo(tipo_id: int, current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -788,7 +846,7 @@ async def delete_tipo_equipo(tipo_id: int):
 # REPORTES
 # ============================================================================
 @app.get("/reportes")
-def get_reportes():
+def get_reportes(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -878,7 +936,7 @@ def get_reportes():
 # USUARIOS
 # ============================================================================
 @app.get("/usuarios")
-def get_usuarios():
+def get_usuarios(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -888,7 +946,7 @@ def get_usuarios():
         connection.close()
 
 @app.post("/usuarios", status_code=201)
-async def create_usuario(req: UsuarioCreateRequest):
+async def create_usuario(req: UsuarioCreateRequest, current_user: dict = Depends(get_current_user)):
     username = req.username.strip().lower()
     if not username:
         raise HTTPException(status_code=400, detail="El username no puede estar vacío")
@@ -900,7 +958,7 @@ async def create_usuario(req: UsuarioCreateRequest):
                 raise HTTPException(status_code=409, detail="El usuario o correo ya existe")
             cursor.execute(
                 "INSERT INTO usuarios (username, email, nombre_completo, rol, password) VALUES (%s, %s, %s, %s, %s)",
-                (username, req.email.strip().lower(), req.nombreCompleto.strip(), req.rol, req.password)
+                (username, req.email.strip().lower(), req.nombreCompleto.strip(), req.rol, _pwd_context.hash(req.password))
             )
             connection.commit()
     finally:
@@ -909,7 +967,9 @@ async def create_usuario(req: UsuarioCreateRequest):
     return {"username": username, "email": req.email, "nombreCompleto": req.nombreCompleto, "rol": req.rol}
 
 @app.put("/usuarios/{username}")
-async def update_usuario(username: str, req: UsuarioUpdateRequest):
+async def update_usuario(username: str, req: UsuarioUpdateRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("rol") != "Admin":
+        raise HTTPException(status_code=403, detail="Solo el administrador puede modificar usuarios")
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -922,7 +982,7 @@ async def update_usuario(username: str, req: UsuarioUpdateRequest):
             if req.rol is not None:
                 campos.append("rol = %s"); valores.append(req.rol)
             if req.password is not None and req.password.strip():
-                campos.append("password = %s"); valores.append(req.password.strip())
+                campos.append("password = %s"); valores.append(_pwd_context.hash(req.password.strip()))
             if not campos:
                 raise HTTPException(status_code=400, detail="Sin campos a actualizar")
             valores.append(username)
@@ -936,7 +996,9 @@ async def update_usuario(username: str, req: UsuarioUpdateRequest):
     return {"status": "success"}
 
 @app.delete("/usuarios/{username}")
-async def delete_usuario(username: str):
+async def delete_usuario(username: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("rol") != "Admin":
+        raise HTTPException(status_code=403, detail="Solo el administrador puede eliminar usuarios")
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -950,7 +1012,7 @@ async def delete_usuario(username: str):
     return {"status": "success"}
 
 @app.post("/usuarios/{username}/fcm-token")
-async def save_fcm_token(username: str, req: FcmTokenRequest):
+async def save_fcm_token(username: str, req: FcmTokenRequest, current_user: dict = Depends(get_current_user)):
     token = req.fcmToken.strip()
     if not token:
         raise HTTPException(status_code=400, detail="fcmToken requerido")
@@ -969,7 +1031,7 @@ async def save_fcm_token(username: str, req: FcmTokenRequest):
 # CHAT
 # ============================================================================
 @app.get("/mensajes")
-def get_mensajes():
+def get_mensajes(current_user: dict = Depends(get_current_user)):
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -991,16 +1053,22 @@ def get_mensajes():
         connection.close()
 
 @app.delete("/mensajes/{mensaje_id}")
-async def delete_mensaje(mensaje_id: int, borrado_por: str):
+async def delete_mensaje(mensaje_id: int, current_user: dict = Depends(get_current_user)):
+    borrado_por = current_user["username"]
+    es_admin = current_user.get("rol") == "Admin"
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
+            cursor.execute("SELECT de_usuario FROM mensajes WHERE id = %s", (mensaje_id,))
+            msg = cursor.fetchone()
+            if not msg:
+                raise HTTPException(status_code=404, detail="Mensaje no encontrado")
+            if msg["de_usuario"] != borrado_por and not es_admin:
+                raise HTTPException(status_code=403, detail="Solo puedes borrar tus propios mensajes")
             cursor.execute(
                 "UPDATE mensajes SET borrado = 1, borrado_por = %s WHERE id = %s",
                 (borrado_por, mensaje_id)
             )
-            if cursor.rowcount == 0:
-                raise HTTPException(status_code=404, detail="Mensaje no encontrado")
             connection.commit()
     finally:
         connection.close()
@@ -1009,17 +1077,20 @@ async def delete_mensaje(mensaje_id: int, borrado_por: str):
     return {"ok": True}
 
 @app.post("/mensajes")
-async def create_mensaje(req: MensajeRequest):
+async def create_mensaje(req: MensajeRequest, current_user: dict = Depends(get_current_user)):
     texto = req.texto.strip() if req.texto else ''
     if not texto and not req.imagen:
         raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
+    # Identidad siempre del token, nunca del body
+    de_usuario = current_user["username"]
+    nombre_completo = current_user.get("nombreCompleto") or req.nombreCompleto
     ahora = datetime.now()
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
             cursor.execute(
                 "INSERT INTO mensajes (de_usuario, nombre_completo, texto, imagen, fecha) VALUES (%s, %s, %s, %s, %s)",
-                (req.deUsuario, req.nombreCompleto, texto, req.imagen, ahora)
+                (de_usuario, nombre_completo, texto, req.imagen, ahora)
             )
             connection.commit()
             nuevo_id = cursor.lastrowid
@@ -1028,8 +1099,8 @@ async def create_mensaje(req: MensajeRequest):
     payload = {
         "tipo": "chat",
         "id": str(nuevo_id),
-        "deUsuario": req.deUsuario,
-        "nombreCompleto": req.nombreCompleto,
+        "deUsuario": de_usuario,
+        "nombreCompleto": nombre_completo,
         "texto": texto,
         "imagen": req.imagen,
         "fecha": ahora.isoformat(),
@@ -1058,7 +1129,7 @@ def _ai_text(response) -> str:
     return ''.join(block.text for block in response.content if block.type == 'text')
 
 @app.post("/ai/consulta")
-def ai_consulta(req: ConsultaAiRequest):
+def ai_consulta(req: ConsultaAiRequest, current_user: dict = Depends(get_current_user)):
     client = _get_ai_client()
     connection = get_db_connection()
     try:
@@ -1110,7 +1181,7 @@ Fecha actual: {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
 
 
 @app.post("/ai/anomalias")
-def ai_anomalias():
+def ai_anomalias(current_user: dict = Depends(get_current_user)):
     client = _get_ai_client()
     connection = get_db_connection()
     try:
@@ -1191,7 +1262,7 @@ Fecha actual: {datetime.now().strftime('%Y-%m-%d %H:%M')}"""
 
 
 @app.post("/ai/sugerencia/{ticket_id}")
-def ai_sugerencia(ticket_id: str):
+def ai_sugerencia(ticket_id: str, current_user: dict = Depends(get_current_user)):
     client = _get_ai_client()
     connection = get_db_connection()
     try:
