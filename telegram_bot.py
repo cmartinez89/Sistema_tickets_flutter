@@ -8,7 +8,7 @@ import logging
 import requests
 import pymysql
 import anthropic
-from datetime import datetime
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
@@ -16,7 +16,6 @@ from telegram.ext import (
     filters, ContextTypes,
 )
 
-# ─── Configuración ────────────────────────────────────────────────────────────
 import os
 from dotenv import load_dotenv
 load_dotenv('/home/ubuntu/api-soporte/.env')
@@ -24,6 +23,7 @@ load_dotenv('/home/ubuntu/api-soporte/.env')
 TELEGRAM_TOKEN = os.environ['TELEGRAM_BOT_TOKEN']
 ANTHROPIC_KEY  = os.environ['ANTHROPIC_API_KEY']
 API_URL        = os.environ.get('API_URL', 'http://localhost:8000')
+JWT_SECRET     = os.environ.get('JWT_SECRET_KEY', '')
 
 DB = dict(
     host=os.environ.get('DB_HOST', 'localhost'),
@@ -34,10 +34,10 @@ DB = dict(
     cursorclass=pymysql.cursors.DictCursor,
 )
 
-REGISTRO     = 1
+REGISTRO      = 1
 REGISTRO_AREA = 4
-CONVERSACION = 2
-CONFIRMACION = 3
+CONVERSACION  = 2
+CONFIRMACION  = 3
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s',
@@ -48,6 +48,24 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+# ─── Token JWT del bot ────────────────────────────────────────────────────────
+def _bot_token() -> str:
+    """Genera un JWT de larga duración para que el bot llame a la API."""
+    import jwt as pyjwt
+    return pyjwt.encode(
+        {
+            "username": "_bot_telegram",
+            "rol": "Admin",
+            "nombreCompleto": "Bot Telegram",
+            "exp": datetime.now() + timedelta(days=365),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+_BOT_JWT = _bot_token() if JWT_SECRET else ""
+_API_HEADERS = {"Authorization": f"Bearer {_BOT_JWT}", "Content-Type": "application/json"}
 
 # ─── Base de datos ────────────────────────────────────────────────────────────
 def _db(): return pymysql.connect(**DB)
@@ -111,10 +129,37 @@ def admins_telegram_ids() -> list:
     finally:
         db.close()
 
+def get_tecnicos() -> list:
+    """Retorna lista de técnicos disponibles para asignar tickets."""
+    db = _db()
+    try:
+        with db.cursor() as c:
+            c.execute(
+                "SELECT username, nombre_completo FROM usuarios WHERE rol IN ('Técnico', 'Admin') ORDER BY nombre_completo ASC"
+            )
+            return c.fetchall()
+    finally:
+        db.close()
+
+def buscar_tecnico(nombre_o_username: str, tecnicos: list) -> dict | None:
+    """Busca un técnico por nombre o username (tolerante a mayúsculas y parciales)."""
+    if not nombre_o_username:
+        return None
+    q = nombre_o_username.strip().lower()
+    # Coincidencia exacta primero
+    for t in tecnicos:
+        if t['username'].lower() == q or t['nombre_completo'].lower() == q:
+            return t
+    # Coincidencia parcial
+    for t in tecnicos:
+        if q in t['username'].lower() or q in t['nombre_completo'].lower():
+            return t
+    return None
+
 # ─── Datos del sistema ────────────────────────────────────────────────────────
 def _fetch_lista(ruta: str, campo: str, fallback: list) -> list:
     try:
-        r = requests.get(f"{API_URL}{ruta}", timeout=5)
+        r = requests.get(f"{API_URL}{ruta}", headers=_API_HEADERS, timeout=5)
         if r.ok:
             return [item[campo] for item in r.json()]
     except Exception:
@@ -148,26 +193,37 @@ Datos que DEBES obtener:
    • Baja:  mejora, consulta o solicitud no urgente
 3. area        — usa "{area_usuario}" si el usuario no indica otra; solo pregunta si es ambiguo
 4. categoria   — tipo de problema
+5. asignadoA   — username del técnico si el usuario menciona a quién asignarlo (ej: "asígnalo a julio"); \
+si no lo menciona deja vacío (""), NO lo preguntes tú
 
 Áreas disponibles:     {areas}
 Categorías disponibles: {cats}
+Técnicos disponibles:  {tecnicos}
 
 Reglas:
 - Máximo 2 oraciones por respuesta. No seas redundante.
 - Si el usuario ya dio suficiente info, infiere los campos que puedas y solo pregunta lo que falta.
 - Si el mensaje es claro ("la impresora no jala"), ya tienes el área del perfil — no la preguntes.
-- Cuando tengas los 4 campos con certeza, responde ÚNICAMENTE con este JSON puro, sin markdown, \
-sin backticks, sin texto antes ni después:
-{{"listo":true,"descripcion":"...","prioridad":"Alta|Media|Baja","area":"...","categoria":"..."}}
+- Para asignadoA: si el usuario dice "asígnalo a julio" o "que lo vea juan", busca el username \
+correspondiente en la lista de técnicos. Si no hay coincidencia, deja "".
+- Cuando tengas descripcion, prioridad, area y categoria con certeza, responde ÚNICAMENTE con este \
+JSON puro, sin markdown, sin backticks, sin texto antes ni después:
+{{"listo":true,"descripcion":"...","prioridad":"Alta|Media|Baja","area":"...","categoria":"...","asignadoA":"username_o_vacio"}}
 """
 
-def claude(historial: list, areas: list, cats: list, usuario: dict = None) -> dict:
+def claude(historial: list, areas: list, cats: list, tecnicos: list, usuario: dict = None) -> dict:
     """Retorna {'texto': str} o {'ticket': dict}"""
     import re
     nombre = usuario.get('nombre_completo', 'Usuario') if usuario else 'Usuario'
     area_u = usuario.get('area') or 'no especificada' if usuario else 'no especificada'
-    system = SYSTEM.format(areas=", ".join(areas), cats=", ".join(cats),
-                           nombre=nombre, area_usuario=area_u)
+    tecnicos_str = ', '.join(f"{t['nombre_completo']} ({t['username']})" for t in tecnicos)
+    system = SYSTEM.format(
+        areas=", ".join(areas),
+        cats=", ".join(cats),
+        tecnicos=tecnicos_str,
+        nombre=nombre,
+        area_usuario=area_u,
+    )
     resp = _ai.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=512,
@@ -199,34 +255,32 @@ def claude(historial: list, areas: list, cats: list, usuario: dict = None) -> di
 # ─── Crear ticket vía API ─────────────────────────────────────────────────────
 def crear_ticket(usuario: dict, t: dict) -> str:
     payload = {
-        "usuario":    usuario['username'],
+        "usuario":      usuario['username'],
         "departamento": t['area'],
-        "descripcion": t['descripcion'],
-        "prioridad":  t['prioridad'],
-        "estado":     "Pendiente",
-        "asignadoA":  "",
-        "fecha":      datetime.now().isoformat(),
-        "categoria":  t.get('categoria', 'Otro'),
-        "area":       t['area'],
+        "descripcion":  t['descripcion'],
+        "prioridad":    t['prioridad'],
+        "estado":       "Pendiente",
+        "asignadoA":    t.get('asignadoA', '') or '',
+        "fecha":        datetime.now().isoformat(),
+        "categoria":    t.get('categoria', 'Otro'),
+        "area":         t['area'],
     }
-    r = requests.post(f"{API_URL}/tickets", json=payload, timeout=10)
+    r = requests.post(f"{API_URL}/tickets", json=payload, headers=_API_HEADERS, timeout=10)
     r.raise_for_status()
     return r.json().get('id', 'TK-???')
 
 # ─── Handlers ─────────────────────────────────────────────────────────────────
 async def entrada(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Punto de entrada — cualquier mensaje o /start"""
     tid = update.effective_user.id
     usuario = usuario_por_telegram_id(tid)
 
     if usuario:
-        # Usuario ya registrado → iniciar conversación directamente
-        ctx.user_data['usuario']  = usuario
+        ctx.user_data['usuario']   = usuario
         ctx.user_data['historial'] = []
-        ctx.user_data['areas']    = get_areas()
-        ctx.user_data['cats']     = get_categorias()
+        ctx.user_data['areas']     = get_areas()
+        ctx.user_data['cats']      = get_categorias()
+        ctx.user_data['tecnicos']  = get_tecnicos()
 
-        # Si llegó con un mensaje de texto (no solo /start), procesarlo ya
         if update.message.text and not update.message.text.startswith('/'):
             return await _procesar_mensaje(update, ctx)
 
@@ -236,7 +290,6 @@ async def entrada(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return CONVERSACION
 
-    # No registrado → pedir username
     await update.message.reply_text(
         "👋 Hola\\! Soy el asistente de soporte de *Beta Systems*\\.\n\n"
         "Para continuar, escribe tu *usuario del sistema* \\(ej\\: `cmartinez`\\):",
@@ -260,9 +313,9 @@ async def registro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     tid = update.effective_user.id
     vincular_telegram(usuario['username'], tid)
-    ctx.user_data['usuario'] = usuario
+    ctx.user_data['usuario']  = usuario
+    ctx.user_data['tecnicos'] = get_tecnicos()
 
-    # Si ya tiene área guardada, pasar directo a conversación
     if usuario.get('area'):
         ctx.user_data['historial'] = []
         ctx.user_data['areas']     = get_areas()
@@ -275,7 +328,6 @@ async def registro(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return CONVERSACION
 
-    # Sin área → pedirla
     areas = get_areas()
     ctx.user_data['areas'] = areas
     lista = '\n'.join(f"• {a}" for a in areas)
@@ -291,7 +343,6 @@ async def registro_area(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     texto = update.message.text.strip()
     areas = ctx.user_data.get('areas', get_areas())
 
-    # Buscar área más parecida (case-insensitive, coincidencia parcial)
     area_encontrada = next(
         (a for a in areas if texto.lower() in a.lower() or a.lower() in texto.lower()),
         None
@@ -327,23 +378,40 @@ async def conversacion(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def _procesar_mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     texto    = update.message.text
     historial: list = ctx.user_data.setdefault('historial', [])
-    areas    = ctx.user_data.get('areas', get_areas())
-    cats     = ctx.user_data.get('cats',  get_categorias())
+    areas    = ctx.user_data.get('areas',    get_areas())
+    cats     = ctx.user_data.get('cats',     get_categorias())
+    tecnicos = ctx.user_data.get('tecnicos', get_tecnicos())
 
     historial.append({'role': 'user', 'content': texto})
     await ctx.bot.send_chat_action(update.effective_chat.id, 'typing')
 
-    resultado = claude(historial, areas, cats, usuario=ctx.user_data.get('usuario'))
+    resultado = claude(historial, areas, cats, tecnicos, usuario=ctx.user_data.get('usuario'))
 
     if 'ticket' in resultado:
         t = resultado['ticket']
+
+        # Resolver nombre del técnico asignado para mostrarlo bonito
+        asignado_username = (t.get('asignadoA') or '').strip()
+        asignado_display  = ''
+        if asignado_username:
+            tec = buscar_tecnico(asignado_username, tecnicos)
+            if tec:
+                t['asignadoA']   = tec['username']
+                asignado_display = tec['nombre_completo']
+            else:
+                t['asignadoA']   = ''
+                asignado_display = ''
+
         ctx.user_data['ticket_pendiente'] = t
+
+        linea_asignado = f"\n👷 Asignado a: *{_esc(asignado_display)}*" if asignado_display else ''
         resumen = (
             f"📋 *Resumen del ticket:*\n\n"
             f"📝 {_esc(t['descripcion'])}\n"
             f"🚨 Prioridad: *{_esc(t['prioridad'])}*\n"
             f"🏢 Área: {_esc(t['area'])}\n"
-            f"🏷️ Categoría: {_esc(t.get('categoria','Otro'))}\n\n"
+            f"🏷️ Categoría: {_esc(t.get('categoria','Otro'))}"
+            f"{linea_asignado}\n\n"
             "¿Confirmas la creación?"
         )
         teclado = InlineKeyboardMarkup([[
@@ -374,6 +442,7 @@ async def confirmacion(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     usuario = ctx.user_data['usuario']
     t       = ctx.user_data['ticket_pendiente']
+    tecnicos = ctx.user_data.get('tecnicos', [])
 
     try:
         ticket_id = crear_ticket(usuario, t)
@@ -386,23 +455,34 @@ async def confirmacion(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ctx.user_data.clear()
         return ConversationHandler.END
 
+    asignado_username = (t.get('asignadoA') or '').strip()
+    asignado_display  = ''
+    if asignado_username:
+        tec = buscar_tecnico(asignado_username, tecnicos)
+        asignado_display = tec['nombre_completo'] if tec else asignado_username
+
+    linea_asignado = f"\n👷 Asignado a: *{_esc(asignado_display)}*" if asignado_display else '\n👷 Sin asignar'
+
     await query.edit_message_text(
         f"✅ *Ticket creado exitosamente*\n\n"
         f"🎫 ID: *{_esc(ticket_id)}*\n"
         f"📝 {_esc(t['descripcion'])}\n"
-        f"🚨 Prioridad: {_esc(t['prioridad'])}\n\n"
+        f"🚨 Prioridad: {_esc(t['prioridad'])}"
+        f"{linea_asignado}\n\n"
         "El equipo de TI atenderá tu solicitud\\. ¡Gracias\\!",
         parse_mode='MarkdownV2',
     )
 
     # Notificar admins
+    linea_asignado_admin = f"\n👷 Asignado a: *{_esc(asignado_display)}*" if asignado_display else ''
     msg_admin = (
         f"🎫 *Nuevo ticket vía Telegram*\n\n"
         f"👤 {_esc(usuario['nombre_completo'])} \\(@{_esc(usuario['username'])}\\)\n"
         f"📋 {_esc(t['descripcion'])}\n"
         f"🚨 Prioridad: *{_esc(t['prioridad'])}*\n"
         f"🏢 Área: {_esc(t['area'])}\n"
-        f"🏷️ Categoría: {_esc(t.get('categoria','Otro'))}\n"
+        f"🏷️ Categoría: {_esc(t.get('categoria','Otro'))}"
+        f"{linea_asignado_admin}\n"
         f"🆔 ID: *{_esc(ticket_id)}*"
     )
     for admin_id in admins_telegram_ids():
@@ -425,7 +505,6 @@ async def cancelar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 def _esc(text: str) -> str:
-    """Escapa caracteres especiales para MarkdownV2"""
     if not text:
         return ''
     for ch in r'_*[]()~`>#+-=|{}.!':

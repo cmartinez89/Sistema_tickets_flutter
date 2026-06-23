@@ -42,11 +42,17 @@ class Session {
         await limpiar();
         return null;
       }
+      final token = data['token'] as String? ?? '';
+      // Rechazar tokens que no sean JWT válidos (3 partes separadas por '.')
+      if (token.split('.').length != 3) {
+        await limpiar();
+        return null;
+      }
       return Session(
         username: data['username'] ?? '',
         nombreCompleto: data['nombreCompleto'] ?? '',
         rol: data['rol'] ?? '',
-        token: data['token'] ?? '',
+        token: token,
       );
     } catch (_) {
       return null;
