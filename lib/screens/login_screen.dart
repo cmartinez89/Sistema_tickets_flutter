@@ -26,7 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Future<bool> _mostrarDialogoCambioPassword(String username) async {
+  Future<bool> _mostrarDialogoCambioPassword(String username, String token) async {
     final nuevaCtrl = TextEditingController();
     final confirmarCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -95,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (!formKey.currentState!.validate()) return;
                       setStateDialog(() => guardando = true);
                       try {
-                        final tmpApi = api_service.ApiService(token: '');
+                        final tmpApi = api_service.ApiService(token: token);
                         await tmpApi.cambiarPassword(username, nuevaCtrl.text.trim());
                         if (ctx.mounted) Navigator.of(ctx).pop(true);
                       } catch (e) {
@@ -175,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
 
         if (data['forzarCambioPassword'] == true && mounted) {
-          final cambiada = await _mostrarDialogoCambioPassword(session.username);
+          final cambiada = await _mostrarDialogoCambioPassword(session.username, session.token);
           if (!cambiada) return;
         }
 

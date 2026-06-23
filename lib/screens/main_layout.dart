@@ -19,7 +19,7 @@ import 'reportes_screen.dart';
 import 'ai_screen.dart';
 import 'login_screen.dart';
 
-const String kWsUrl = 'ws://54.161.41.131:8000/ws';
+const String kWsBaseUrl = 'ws://54.161.41.131:8000/ws';
 
 class MainLayout extends StatefulWidget {
   final Session session;
@@ -48,7 +48,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _api = ApiService(token: widget.session.token);
-    _ws = WebSocketService(url: kWsUrl, onMensaje: _manejarMensajeWs);
+    _ws = WebSocketService(url: '$kWsBaseUrl?token=${Uri.encodeComponent(widget.session.token)}', onMensaje: _manejarMensajeWs);
     _cargarDatos().then((_) {
       _ws.iniciar();
       _cargarMensajes();
@@ -240,7 +240,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         usuarios: _usuarios,
         onVolver: () => setState(() => _screenIndex = _screenAnterior),
         onBorrarMensaje: (id) async {
-          await _api.borrarMensaje(id, widget.session.username);
+          await _api.borrarMensaje(id);
           setState(() {
             _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: widget.session.username) : m).toList();
           });

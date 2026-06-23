@@ -201,9 +201,9 @@ class ApiService {
     if (res.statusCode != 200 && res.statusCode != 201) throw Exception('Error al enviar mensaje');
   }
 
-  Future<void> borrarMensaje(String id, String borradoPor) async {
+  Future<void> borrarMensaje(String id) async {
     final res = await http.delete(
-      Uri.parse('$kApiUrl/mensajes/$id?borrado_por=${Uri.encodeComponent(borradoPor)}'),
+      Uri.parse('$kApiUrl/mensajes/$id'),
       headers: _headers,
     ).timeout(kTimeout);
     if (res.statusCode != 200) throw Exception('Error al borrar mensaje');
