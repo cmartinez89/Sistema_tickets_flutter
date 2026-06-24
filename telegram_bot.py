@@ -5,6 +5,7 @@ Levanta tickets vía conversación inteligente con Claude.
 
 import json
 import logging
+import uuid
 import requests
 import pymysql
 import anthropic
@@ -38,6 +39,10 @@ REGISTRO      = 1
 REGISTRO_AREA = 4
 CONVERSACION  = 2
 CONFIRMACION  = 3
+SOLICITAR_AREA = 5
+
+# Solicitudes de área pendientes de aprobación admin: {key: {area, user_chat_id, ticket_data, usuario}}
+_pending_areas: dict = {}
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)s %(message)s',
@@ -206,9 +211,11 @@ Reglas:
 - Si el mensaje es claro ("la impresora no jala"), ya tienes el área del perfil — no la preguntes.
 - Para asignadoA: si el usuario dice "asígnalo a julio" o "que lo vea juan", busca el username \
 correspondiente en la lista de técnicos. Si no hay coincidencia, deja "".
+- Si el usuario menciona explícitamente un área que NO está en la lista, úsala tal cual y agrega \
+"area_nueva": true en el JSON. No la rechaces ni uses la más cercana.
 - Cuando tengas descripcion, prioridad, area y categoria con certeza, responde ÚNICAMENTE con este \
 JSON puro, sin markdown, sin backticks, sin texto antes ni después:
-{{"listo":true,"descripcion":"...","prioridad":"Alta|Media|Baja","area":"...","categoria":"...","asignadoA":"username_o_vacio"}}
+{{"listo":true,"descripcion":"...","prioridad":"Alta|Media|Baja","area":"...","categoria":"...","asignadoA":"username_o_vacio","area_nueva":false}}
 """
 
 def claude(historial: list, areas: list, cats: list, tecnicos: list, usuario: dict = None) -> dict:
@@ -389,6 +396,23 @@ async def _procesar_mensaje(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if 'ticket' in resultado:
         t = resultado['ticket']
+        areas = ctx.user_data.get('areas', get_areas())
+
+        # Detectar si el área solicitada no existe en el catálogo
+        area_es_nueva = t.get('area_nueva', False) or (t.get('area') and t['area'] not in areas)
+        if area_es_nueva:
+            ctx.user_data['ticket_pendiente'] = t
+            teclado = InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Sí, solicitar", callback_data="sol_area_si"),
+                InlineKeyboardButton("❌ No, elegir existente", callback_data="sol_area_no"),
+            ]])
+            await update.message.reply_text(
+                f"El área *{_esc(t['area'])}* no existe en el sistema\\.\n"
+                "¿Quieres que le solicite al administrador que la agregue?",
+                parse_mode='MarkdownV2',
+                reply_markup=teclado,
+            )
+            return SOLICITAR_AREA
 
         # Resolver nombre del técnico asignado para mostrarlo bonito
         asignado_username = (t.get('asignadoA') or '').strip()
@@ -504,6 +528,132 @@ async def cancelar(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def solicitud_area_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """El usuario decide si solicita o no la creación del área nueva."""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "sol_area_no":
+        areas = ctx.user_data.get('areas', get_areas())
+        lista = '\n'.join(f"• {a}" for a in areas)
+        ctx.user_data['ticket_pendiente'] = None
+        await query.edit_message_text(
+            f"De acuerdo\\. Elige una de las áreas disponibles:\n\n{_esc(lista)}\n\n"
+            "Cuéntame de nuevo con el área correcta:",
+            parse_mode='MarkdownV2',
+        )
+        return CONVERSACION
+
+    # sol_area_si — enviar solicitud al admin
+    t       = ctx.user_data.get('ticket_pendiente', {})
+    usuario = ctx.user_data.get('usuario', {})
+    area    = t.get('area', '')
+    key     = uuid.uuid4().hex[:8]
+
+    _pending_areas[key] = {
+        'area':         area,
+        'user_chat_id': update.effective_chat.id,
+        'ticket_data':  t,
+        'usuario':      usuario,
+    }
+
+    teclado_admin = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Crear área", callback_data=f"aprobar_area:{key}"),
+        InlineKeyboardButton("❌ Rechazar",   callback_data=f"rechazar_area:{key}"),
+    ]])
+    msg_admin = (
+        f"📋 *Solicitud de nueva área*\n\n"
+        f"👤 {_esc(usuario.get('nombre_completo',''))} solicita crear:\n"
+        f"📂 *{_esc(area)}*\n\n"
+        f"Para el ticket:\n_{_esc(t.get('descripcion',''))}_"
+    )
+    for admin_id in admins_telegram_ids():
+        try:
+            await ctx.bot.send_message(
+                admin_id, msg_admin,
+                parse_mode='MarkdownV2',
+                reply_markup=teclado_admin,
+            )
+        except Exception as e:
+            log.warning(f"No se pudo notificar admin {admin_id}: {e}")
+
+    await query.edit_message_text(
+        "✅ Solicitud enviada al administrador\\.\n"
+        "Te notificaré cuando decida\\. ¡Gracias por tu paciencia\\!",
+        parse_mode='MarkdownV2',
+    )
+    ctx.user_data.clear()
+    return ConversationHandler.END
+
+
+async def admin_area_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """El admin aprueba o rechaza la creación de un área nueva."""
+    query = update.callback_query
+    await query.answer()
+
+    if ':' not in query.data:
+        return
+    action, key = query.data.split(':', 1)
+    pending = _pending_areas.get(key)
+
+    if not pending:
+        await query.edit_message_text("⚠️ Esta solicitud ya fue procesada o expiró\\.", parse_mode='MarkdownV2')
+        return
+
+    area          = pending['area']
+    user_chat_id  = pending['user_chat_id']
+
+    if action == 'aprobar_area':
+        r = requests.post(f"{API_URL}/areas", json={"nombre": area}, headers=_API_HEADERS, timeout=5)
+        if not r.ok:
+            await query.edit_message_text(f"❌ Error al crear el área: {_esc(r.text)}", parse_mode='MarkdownV2')
+            return
+        try:
+            ticket_id = crear_ticket(pending['usuario'], pending['ticket_data'])
+        except Exception as e:
+            log.error(f"Error creando ticket tras aprobar área: {e}")
+            await query.edit_message_text(
+                f"✅ Área *{_esc(area)}* creada, pero error al generar ticket\\.",
+                parse_mode='MarkdownV2',
+            )
+            await ctx.bot.send_message(
+                user_chat_id,
+                f"✅ Área *{_esc(area)}* aprobada, pero hubo un error al crear el ticket\\.\n"
+                "Escribe /start para intentarlo de nuevo\\.",
+                parse_mode='MarkdownV2',
+            )
+            del _pending_areas[key]
+            return
+
+        await query.edit_message_text(
+            f"✅ Área *{_esc(area)}* creada\\. Ticket *{_esc(ticket_id)}* generado\\.",
+            parse_mode='MarkdownV2',
+        )
+        await ctx.bot.send_message(
+            user_chat_id,
+            f"✅ *El administrador aprobó el área {_esc(area)}*\\.\n\n"
+            f"🎫 Ticket *{_esc(ticket_id)}* creado exitosamente\\. ¡El equipo de TI lo atenderá pronto\\!",
+            parse_mode='MarkdownV2',
+        )
+
+    else:  # rechazar_area
+        areas_list = get_areas()
+        lista = ', '.join(areas_list)
+        await query.edit_message_text(
+            f"❌ Área *{_esc(area)}* rechazada\\.",
+            parse_mode='MarkdownV2',
+        )
+        await ctx.bot.send_message(
+            user_chat_id,
+            f"❌ El administrador no aprobó el área *{_esc(area)}*\\.\n\n"
+            f"Áreas disponibles: {_esc(lista)}\n\n"
+            "Escribe /start para intentar con otra área\\.",
+            parse_mode='MarkdownV2',
+        )
+
+    del _pending_areas[key]
+
+
 def _esc(text: str) -> str:
     if not text:
         return ''
@@ -522,15 +672,20 @@ def main():
             MessageHandler(filters.TEXT & ~filters.COMMAND, entrada),
         ],
         states={
-            REGISTRO:      [MessageHandler(filters.TEXT & ~filters.COMMAND, registro)],
-            REGISTRO_AREA: [MessageHandler(filters.TEXT & ~filters.COMMAND, registro_area)],
-            CONVERSACION:  [MessageHandler(filters.TEXT & ~filters.COMMAND, conversacion)],
-            CONFIRMACION:  [CallbackQueryHandler(confirmacion)],
+            REGISTRO:       [MessageHandler(filters.TEXT & ~filters.COMMAND, registro)],
+            REGISTRO_AREA:  [MessageHandler(filters.TEXT & ~filters.COMMAND, registro_area)],
+            CONVERSACION:   [MessageHandler(filters.TEXT & ~filters.COMMAND, conversacion)],
+            CONFIRMACION:   [CallbackQueryHandler(confirmacion)],
+            SOLICITAR_AREA: [CallbackQueryHandler(solicitud_area_callback)],
         },
         fallbacks=[CommandHandler('cancelar', cancelar)],
         per_message=False,
     )
 
+    # Handler global para que el admin apruebe/rechace nuevas áreas
+    app.add_handler(CallbackQueryHandler(
+        admin_area_callback, pattern=r'^(aprobar|rechazar)_area:'
+    ))
     app.add_handler(conv)
     log.info("Bot iniciado — @Soporte_BSM_bot")
     app.run_polling(drop_pending_updates=True)

@@ -5,7 +5,7 @@ import '../models/equipo_model.dart';
 import '../models/chat_message_model.dart';
 import '../models/usuario_model.dart';
 
-const String kApiUrl = 'http://54.161.41.131:8000';
+const String kApiUrl = 'https://soporte.beta.com.mx/api';
 const Duration kTimeout = Duration(seconds: 15);
 
 class ApiService {

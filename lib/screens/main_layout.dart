@@ -19,7 +19,7 @@ import 'reportes_screen.dart';
 import 'ai_screen.dart';
 import 'login_screen.dart';
 
-const String kWsBaseUrl = 'ws://54.161.41.131:8000/ws';
+const String kWsBaseUrl = 'wss://soporte.beta.com.mx/ws';
 
 class MainLayout extends StatefulWidget {
   final Session session;

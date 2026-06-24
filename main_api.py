@@ -10,7 +10,7 @@ import re
 import requests as _requests
 from datetime import datetime, date, timedelta
 import jwt as pyjwt
-from passlib.context import CryptContext
+import bcrypt as _bcrypt_lib
 
 # Cargar .env si existe (para ANTHROPIC_API_KEY y otras vars)
 _env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -29,7 +29,14 @@ _jwt_secret = os.environ.get('JWT_SECRET_KEY', '')
 if not _jwt_secret:
     raise RuntimeError("JWT_SECRET_KEY no configurada en .env")
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash_password(plain: str) -> str:
+    return _bcrypt_lib.hashpw(plain.encode('utf-8'), _bcrypt_lib.gensalt()).decode('utf-8')
+
+def _verify_password(plain: str, hashed: str) -> bool:
+    try:
+        return _bcrypt_lib.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+    except Exception:
+        return False
 _bearer = HTTPBearer(auto_error=False)
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer)):
@@ -377,12 +384,12 @@ def login(req: LoginRequest):
 
             # Verificar bcrypt
             if stored_pw.startswith("$2b$") or stored_pw.startswith("$2a$"):
-                password_ok = _pwd_context.verify(req.password, stored_pw)
+                password_ok = _verify_password(req.password, stored_pw)
             else:
                 # Contraseña en texto plano (migración): verificar y actualizar a bcrypt
                 if req.password == stored_pw:
                     password_ok = True
-                    hashed = _pwd_context.hash(req.password)
+                    hashed = _hash_password(req.password)
                     cursor.execute("UPDATE usuarios SET password = %s WHERE username = %s", (hashed, username))
                     connection.commit()
 
@@ -415,7 +422,7 @@ def cambiar_password(req: CambiarPasswordRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=403, detail="Solo puedes cambiar tu propia contraseña")
     if not req.passwordNueva or len(req.passwordNueva.strip()) < 6:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 6 caracteres")
-    hashed = _pwd_context.hash(req.passwordNueva.strip())
+    hashed = _hash_password(req.passwordNueva.strip())
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -958,7 +965,7 @@ async def create_usuario(req: UsuarioCreateRequest, current_user: dict = Depends
                 raise HTTPException(status_code=409, detail="El usuario o correo ya existe")
             cursor.execute(
                 "INSERT INTO usuarios (username, email, nombre_completo, rol, password) VALUES (%s, %s, %s, %s, %s)",
-                (username, req.email.strip().lower(), req.nombreCompleto.strip(), req.rol, _pwd_context.hash(req.password))
+                (username, req.email.strip().lower(), req.nombreCompleto.strip(), req.rol, _hash_password(req.password))
             )
             connection.commit()
     finally:
@@ -982,7 +989,7 @@ async def update_usuario(username: str, req: UsuarioUpdateRequest, current_user:
             if req.rol is not None:
                 campos.append("rol = %s"); valores.append(req.rol)
             if req.password is not None and req.password.strip():
-                campos.append("password = %s"); valores.append(_pwd_context.hash(req.password.strip()))
+                campos.append("password = %s"); valores.append(_hash_password(req.password.strip()))
             if not campos:
                 raise HTTPException(status_code=400, detail="Sin campos a actualizar")
             valores.append(username)
