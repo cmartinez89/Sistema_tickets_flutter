@@ -866,6 +866,233 @@ async def delete_tipo_equipo(tipo_id: int, current_user: dict = Depends(get_curr
     return {"status": "success"}
 
 # ============================================================================
+# PROYECTOS Y TAREAS
+# ============================================================================
+class ProyectoRequest(BaseModel):
+    nombre: str
+    descripcion: Optional[str] = ''
+    fechaInicio: str
+    fechaFin: str
+    estado: str = 'activo'
+    responsableUsername: Optional[str] = None
+
+class TareaRequest(BaseModel):
+    proyectoId: Optional[int] = None
+    titulo: str
+    descripcion: Optional[str] = ''
+    estado: str = 'por_hacer'
+    prioridad: str = 'media'
+    fechaInicio: Optional[str] = None
+    fechaFin: Optional[str] = None
+    asignadoAUsername: Optional[str] = None
+
+class TareaEstadoRequest(BaseModel):
+    estado: str
+
+class TareaFechasRequest(BaseModel):
+    fechaInicio: str
+    fechaFin: str
+
+PROYECTO_SELECT = """
+    SELECT p.id, p.nombre, p.descripcion,
+           p.fecha_inicio AS fechaInicio, p.fecha_fin AS fechaFin, p.estado,
+           p.responsable_username AS responsableUsername, u.nombre_completo AS responsableNombre,
+           COUNT(t.id) AS tareasTotal,
+           COALESCE(SUM(CASE WHEN t.estado = 'hecho' THEN 1 ELSE 0 END), 0) AS tareasHecho
+    FROM proyectos p
+    LEFT JOIN usuarios u ON u.username = p.responsable_username
+    LEFT JOIN tareas t ON t.proyecto_id = p.id
+    GROUP BY p.id
+"""
+
+TAREA_SELECT = """
+    SELECT t.id, t.proyecto_id AS proyectoId, p.nombre AS proyectoNombre,
+           t.titulo, t.descripcion, t.estado,
+           t.fecha_inicio AS fechaInicio, t.fecha_fin AS fechaFin,
+           t.asignado_a_username AS asignadoAUsername, u.nombre_completo AS asignadoANombre,
+           t.prioridad, t.created_at AS creadoEn
+    FROM tareas t
+    JOIN proyectos p ON p.id = t.proyecto_id
+    LEFT JOIN usuarios u ON u.username = t.asignado_a_username
+"""
+
+def _build_proyecto(p: dict) -> dict:
+    for campo in ('fechaInicio', 'fechaFin'):
+        if isinstance(p.get(campo), (datetime, date)):
+            p[campo] = p[campo].isoformat()
+    return p
+
+def _build_tarea(t: dict) -> dict:
+    for campo in ('fechaInicio', 'fechaFin'):
+        if isinstance(t.get(campo), (datetime, date)):
+            t[campo] = t[campo].isoformat()
+    if isinstance(t.get('creadoEn'), datetime):
+        t['creadoEn'] = t['creadoEn'].isoformat()
+    return t
+
+@app.get("/proyectos")
+def get_proyectos(current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(PROYECTO_SELECT + " ORDER BY p.fecha_inicio DESC")
+            return [_build_proyecto(p) for p in cursor.fetchall()]
+    finally:
+        connection.close()
+
+@app.post("/proyectos", status_code=201)
+async def create_proyecto(req: ProyectoRequest, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO proyectos (nombre, descripcion, fecha_inicio, fecha_fin, estado, responsable_username)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (req.nombre, req.descripcion, req.fechaInicio, req.fechaFin, req.estado, req.responsableUsername)
+            )
+            connection.commit()
+            proyecto_id = cursor.lastrowid
+            cursor.execute(PROYECTO_SELECT + " HAVING p.id = %s", (proyecto_id,))
+            p = cursor.fetchone()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "proyectos", "accion": "nuevo"})
+    return _build_proyecto(p)
+
+@app.put("/proyectos/{proyecto_id}")
+async def update_proyecto(proyecto_id: int, req: ProyectoRequest, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE proyectos SET nombre = %s, descripcion = %s, fecha_inicio = %s,
+                   fecha_fin = %s, estado = %s, responsable_username = %s WHERE id = %s""",
+                (req.nombre, req.descripcion, req.fechaInicio, req.fechaFin, req.estado,
+                 req.responsableUsername, proyecto_id)
+            )
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+            cursor.execute(PROYECTO_SELECT + " HAVING p.id = %s", (proyecto_id,))
+            p = cursor.fetchone()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "proyectos", "accion": "actualizado"})
+    return _build_proyecto(p)
+
+@app.delete("/proyectos/{proyecto_id}")
+async def delete_proyecto(proyecto_id: int, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM proyectos WHERE id = %s", (proyecto_id,))
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Proyecto no encontrado")
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "proyectos", "accion": "eliminado"})
+    return {"status": "success"}
+
+@app.get("/tareas")
+def get_tareas(proyectoId: Optional[int] = None, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            if proyectoId is not None:
+                cursor.execute(TAREA_SELECT + " WHERE t.proyecto_id = %s ORDER BY t.created_at DESC", (proyectoId,))
+            else:
+                cursor.execute(TAREA_SELECT + " ORDER BY t.created_at DESC")
+            return [_build_tarea(t) for t in cursor.fetchall()]
+    finally:
+        connection.close()
+
+@app.post("/tareas", status_code=201)
+async def create_tarea(req: TareaRequest, current_user: dict = Depends(get_current_user)):
+    if req.proyectoId is None:
+        raise HTTPException(status_code=400, detail="proyectoId es requerido")
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO tareas (proyecto_id, titulo, descripcion, estado, prioridad,
+                   fecha_inicio, fecha_fin, asignado_a_username)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                (req.proyectoId, req.titulo, req.descripcion, req.estado, req.prioridad,
+                 req.fechaInicio, req.fechaFin, req.asignadoAUsername)
+            )
+            connection.commit()
+            tarea_id = cursor.lastrowid
+            cursor.execute(TAREA_SELECT + " WHERE t.id = %s", (tarea_id,))
+            t = cursor.fetchone()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "tareas", "accion": "nueva"})
+    return _build_tarea(t)
+
+@app.put("/tareas/{tarea_id}")
+async def update_tarea(tarea_id: int, req: TareaRequest, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE tareas SET titulo = %s, descripcion = %s, estado = %s, prioridad = %s,
+                   fecha_inicio = %s, fecha_fin = %s, asignado_a_username = %s WHERE id = %s""",
+                (req.titulo, req.descripcion, req.estado, req.prioridad,
+                 req.fechaInicio, req.fechaFin, req.asignadoAUsername, tarea_id)
+            )
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Tarea no encontrada")
+            cursor.execute(TAREA_SELECT + " WHERE t.id = %s", (tarea_id,))
+            t = cursor.fetchone()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "tareas", "accion": "actualizada"})
+    return _build_tarea(t)
+
+@app.patch("/tareas/{tarea_id}/estado")
+async def update_tarea_estado(tarea_id: int, req: TareaEstadoRequest, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE tareas SET estado = %s WHERE id = %s", (req.estado, tarea_id))
+            connection.commit()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "tareas", "accion": "estado"})
+    return {"status": "success"}
+
+@app.patch("/tareas/{tarea_id}/fechas")
+async def update_tarea_fechas(tarea_id: int, req: TareaFechasRequest, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tareas SET fecha_inicio = %s, fecha_fin = %s WHERE id = %s",
+                (req.fechaInicio, req.fechaFin, tarea_id)
+            )
+            connection.commit()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "tareas", "accion": "fechas"})
+    return {"status": "success"}
+
+@app.delete("/tareas/{tarea_id}")
+async def delete_tarea(tarea_id: int, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM tareas WHERE id = %s", (tarea_id,))
+            connection.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Tarea no encontrada")
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "tareas", "accion": "eliminada"})
+    return {"status": "success"}
+
+# ============================================================================
 # REPORTES
 # ============================================================================
 @app.get("/reportes")
