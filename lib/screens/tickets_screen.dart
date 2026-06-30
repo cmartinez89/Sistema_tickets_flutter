@@ -316,7 +316,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                           child: Row(
                             children: [
                               _estadoChip(
-                                  h['estado_nuevo']?.toString() ??
+                                  h['estadoNuevo']?.toString() ??
                                       ''),
                               const SizedBox(width: 6),
                               Text(
