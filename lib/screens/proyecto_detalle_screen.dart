@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show PointerHoverEvent;
 import '../models/proyecto_model.dart';
 import '../models/tarea_model.dart';
 import '../models/usuario_model.dart';
@@ -490,14 +491,19 @@ class _GanttViewState extends State<_GanttView> {
   static const kLabelWidth = 180.0;
   static const kHeaderHeight = 52.0;
   static const kRowHeight = 48.0;
-  static const kPxPerDay = 40.0;
   static const kHandleWidth = 14.0;
+  static const kMinPxPerDay = 22.0;
+  static const kMaxPxPerDay = 72.0;
 
+  double _pxPerDay = 40.0;
   double _offsetX = 0;
+  double? _chartWidth;
   _DragHit? _dragHit;
   double _dragStartX = 0;
   DateTime? _origInicio;
   DateTime? _origFin;
+  int? _hoverIndex;
+  Offset? _hoverPos;
   late List<Tarea> _tareas;
 
   @override
@@ -505,7 +511,7 @@ class _GanttViewState extends State<_GanttView> {
     super.initState();
     _tareas = List.from(widget.tareas);
     final diasHasta = DateTime.now().difference(widget.proyecto.fechaInicio).inDays - 2;
-    _offsetX = max(0.0, diasHasta * kPxPerDay);
+    _offsetX = max(0.0, diasHasta * _pxPerDay);
   }
 
   @override
@@ -519,10 +525,38 @@ class _GanttViewState extends State<_GanttView> {
 
   double get _maxOffsetX {
     final total = widget.proyecto.fechaFin.difference(widget.proyecto.fechaInicio).inDays + 14;
-    return max(0.0, total * kPxPerDay - 400);
+    return max(0.0, total * _pxPerDay - 400);
+  }
+
+  void _zoom(double delta) {
+    final newPx = (_pxPerDay + delta).clamp(kMinPxPerDay, kMaxPxPerDay);
+    if (newPx == _pxPerDay) return;
+    final chartW = _chartWidth ?? 600.0;
+    final centerDay = (_offsetX + chartW / 2) / _pxPerDay;
+    setState(() {
+      _pxPerDay = newPx;
+      _offsetX = (centerDay * _pxPerDay - chartW / 2).clamp(0.0, _maxOffsetX);
+    });
   }
 
   _DragHit? _hitTest(Offset pos) {
+    final rowIndex = _hitTestRow(pos);
+    if (rowIndex == null) return null;
+    final chartX = pos.dx - kLabelWidth + _offsetX;
+    final t = _tareas[rowIndex];
+    final projStart = widget.proyecto.fechaInicio;
+    final startD = _efectivaInicio(t).difference(projStart).inDays.toDouble();
+    final endD = _efectivaFin(t).difference(projStart).inDays.toDouble();
+    final bL = startD * _pxPerDay;
+    final bR = max(endD, startD + 1) * _pxPerDay;
+    if (chartX <= bL + kHandleWidth) return _DragHit(rowIndex, _DragType.leftEdge);
+    if (chartX >= bR - kHandleWidth) return _DragHit(rowIndex, _DragType.rightEdge);
+    return _DragHit(rowIndex, _DragType.body);
+  }
+
+  /// Row + bar hit test shared by drag-start and hover. Returns the task
+  /// index only if the point actually falls within that task's bar.
+  int? _hitTestRow(Offset pos) {
     if (pos.dx < kLabelWidth) return null;
     final chartX = pos.dx - kLabelWidth + _offsetX;
     final chartY = pos.dy - kHeaderHeight;
@@ -533,17 +567,14 @@ class _GanttViewState extends State<_GanttView> {
       final t = _tareas[i];
       final startD = _efectivaInicio(t).difference(projStart).inDays.toDouble();
       final endD = _efectivaFin(t).difference(projStart).inDays.toDouble();
-      final bL = startD * kPxPerDay;
-      final bR = max(endD, startD + 1) * kPxPerDay;
+      final bL = startD * _pxPerDay;
+      final bR = max(endD, startD + 1) * _pxPerDay;
       final bT = i * kRowHeight + (kRowHeight - 28) / 2;
       final bB = bT + 28;
 
       if (chartY < bT || chartY > bB) continue;
       if (chartX < bL - 4 || chartX > bR + 4) continue;
-
-      if (chartX <= bL + kHandleWidth) return _DragHit(i, _DragType.leftEdge);
-      if (chartX >= bR - kHandleWidth) return _DragHit(i, _DragType.rightEdge);
-      return _DragHit(i, _DragType.body);
+      return i;
     }
     return null;
   }
@@ -562,7 +593,7 @@ class _GanttViewState extends State<_GanttView> {
 
   void _onPanUpdate(DragUpdateDetails d) {
     if (_dragHit != null) {
-      final dd = ((d.localPosition.dx - _dragStartX) / kPxPerDay).round();
+      final dd = ((d.localPosition.dx - _dragStartX) / _pxPerDay).round();
       setState(() {
         final t = _tareas[_dragHit!.index];
         switch (_dragHit!.type) {
@@ -595,6 +626,23 @@ class _GanttViewState extends State<_GanttView> {
     }
   }
 
+  void _onHover(PointerHoverEvent e) {
+    setState(() {
+      _hoverIndex = _hitTestRow(e.localPosition);
+      _hoverPos = e.localPosition;
+    });
+  }
+
+  Color _prioColor(String p) => switch (p) {
+        'alta' => const Color(0xFFE53935),
+        'baja' => const Color(0xFF43A047),
+        _ => const Color(0xFF1E88E5),
+      };
+
+  String _fmt(DateTime? d) => d == null
+      ? '—'
+      : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
   @override
   Widget build(BuildContext context) {
     if (widget.tareas.isEmpty) {
@@ -615,17 +663,124 @@ class _GanttViewState extends State<_GanttView> {
 
     final totalHeight = kHeaderHeight + _tareas.length * kRowHeight;
     return LayoutBuilder(
-      builder: (ctx, constraints) => GestureDetector(
-        onPanStart: _onPanStart,
-        onPanUpdate: _onPanUpdate,
-        onPanEnd: _onPanEnd,
-        child: CustomPaint(
-          size: Size(constraints.maxWidth, max(totalHeight, constraints.maxHeight)),
-          painter: _GanttPainter(
-            proyecto: widget.proyecto,
-            tareas: _tareas,
-            offsetX: _offsetX,
-            dragHit: _dragHit,
+      builder: (ctx, constraints) {
+        _chartWidth = constraints.maxWidth - kLabelWidth;
+        return Stack(
+          children: [
+            MouseRegion(
+              onHover: _onHover,
+              onExit: (_) => setState(() => _hoverIndex = null),
+              child: GestureDetector(
+                onPanStart: _onPanStart,
+                onPanUpdate: _onPanUpdate,
+                onPanEnd: _onPanEnd,
+                child: CustomPaint(
+                  size: Size(constraints.maxWidth, max(totalHeight, constraints.maxHeight)),
+                  painter: _GanttPainter(
+                    proyecto: widget.proyecto,
+                    tareas: _tareas,
+                    offsetX: _offsetX,
+                    pxPerDay: _pxPerDay,
+                    dragHit: _dragHit,
+                    hoverIndex: _hoverIndex,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(top: 10, right: 10, child: _zoomControl()),
+            if (_hoverIndex != null && _dragHit == null && _hoverPos != null)
+              _buildTooltip(constraints, _hoverIndex!, _hoverPos!),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _zoomControl() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove, size: 16),
+            tooltip: 'Alejar',
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.zero,
+            onPressed: _pxPerDay <= kMinPxPerDay ? null : () => _zoom(-8),
+          ),
+          Container(width: 1, height: 18, color: Colors.grey[300]),
+          IconButton(
+            icon: const Icon(Icons.add, size: 16),
+            tooltip: 'Acercar',
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            padding: EdgeInsets.zero,
+            onPressed: _pxPerDay >= kMaxPxPerDay ? null : () => _zoom(8),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTooltip(BoxConstraints constraints, int index, Offset pos) {
+    final t = _tareas[index];
+    const w = 220.0;
+    const approxH = 116.0;
+    double left = pos.dx + 16;
+    if (left + w > constraints.maxWidth) left = pos.dx - w - 16;
+    double top = pos.dy + 12;
+    if (top + approxH > constraints.maxHeight) {
+      top = (pos.dy - approxH - 12).clamp(0.0, constraints.maxHeight);
+    }
+
+    return Positioned(
+      left: left.clamp(0.0, max(0.0, constraints.maxWidth - w)),
+      top: top,
+      child: IgnorePointer(
+        child: Container(
+          width: w,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 14, offset: const Offset(0, 4))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t.titulo,
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              Row(children: [
+                Icon(Icons.event_outlined, size: 13, color: Colors.grey[500]),
+                const SizedBox(width: 5),
+                Text('${_fmt(t.fechaInicio ?? widget.proyecto.fechaInicio)} → ${_fmt(t.fechaFin ?? widget.proyecto.fechaFin)}',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+              ]),
+              const SizedBox(height: 4),
+              Row(children: [
+                Icon(Icons.person_outline, size: 13, color: Colors.grey[500]),
+                const SizedBox(width: 5),
+                Text(t.asignadoANombre ?? 'Sin asignar',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+              ]),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _prioColor(t.prioridad).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(t.prioridad.toUpperCase(),
+                    style: TextStyle(fontSize: 10, color: _prioColor(t.prioridad), fontWeight: FontWeight.bold)),
+              ),
+            ],
           ),
         ),
       ),
@@ -637,24 +792,35 @@ class _GanttPainter extends CustomPainter {
   final Proyecto proyecto;
   final List<Tarea> tareas;
   final double offsetX;
+  final double pxPerDay;
   final _DragHit? dragHit;
+  final int? hoverIndex;
 
   static const kLabelWidth = 180.0;
   static const kHeaderHeight = 52.0;
   static const kRowHeight = 48.0;
   static const kBarHeight = 28.0;
-  static const kPxPerDay = 40.0;
   static const _primary = Color(0xFF1A2B72);
 
   const _GanttPainter({
     required this.proyecto,
     required this.tareas,
     required this.offsetX,
+    required this.pxPerDay,
     this.dragHit,
+    this.hoverIndex,
   });
 
   DateTime _eInicio(Tarea t) => t.fechaInicio ?? proyecto.fechaInicio;
   DateTime _eFin(Tarea t) => t.fechaFin ?? proyecto.fechaFin;
+
+  /// Local-coordinate x range of the clipped, scrollable viewport (the part
+  /// of the chart actually visible on screen right now). Drawing anything
+  /// meant to always fill the visible area — like the header band — must use
+  /// this range rather than [0, size.width], otherwise it scrolls away as
+  /// soon as offsetX is nonzero (which it is on first paint).
+  double _visLeft() => offsetX;
+  double _visRight(Size size) => offsetX + size.width - kLabelWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -681,59 +847,80 @@ class _GanttPainter extends CustomPainter {
 
   void _drawWeekBands(Canvas canvas, Size size) {
     final totalDays = proyecto.fechaFin.difference(proyecto.fechaInicio).inDays + 14;
-    for (int w = 0; w * 7 < totalDays; w++) {
-      if (w.isOdd) {
+    DateTime cur = proyecto.fechaInicio;
+    for (int d = 0; d < totalDays; d++) {
+      if (_isWeekend(cur)) {
         canvas.drawRect(
-          Rect.fromLTWH(w * 7 * kPxPerDay, kHeaderHeight, 7 * kPxPerDay,
-              size.height - kHeaderHeight),
-          Paint()..color = Colors.white.withValues(alpha: 0.5),
+          Rect.fromLTWH(d * pxPerDay, kHeaderHeight, pxPerDay, size.height - kHeaderHeight),
+          Paint()..color = const Color(0xFFEAEDF6),
         );
       }
-    }
-  }
-
-  void _drawHeader(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Rect.fromLTWH(-offsetX, 0, size.width + offsetX, kHeaderHeight),
-      Paint()..color = _primary,
-    );
-
-    final totalDays = proyecto.fechaFin.difference(proyecto.fechaInicio).inDays + 14;
-    String? lastMonthKey;
-    DateTime cur = proyecto.fechaInicio;
-
-    for (int d = 0; d < totalDays; d++) {
-      final x = d * kPxPerDay;
-      final mk = '${cur.month}-${cur.year}';
-      if (lastMonthKey != mk) {
-        lastMonthKey = mk;
-        _text(canvas, '${_mes(cur.month)} ${cur.year}', Offset(x + 4, 4),
-            const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold));
-      }
-      if (cur.day == 1 || cur.day % 5 == 0) {
-        _text(canvas, cur.day.toString(), Offset(x + 2, 32),
-            TextStyle(color: _isWeekend(cur) ? Colors.red[300]! : Colors.white70, fontSize: 9));
-      }
-      canvas.drawLine(Offset(x, kHeaderHeight - 6), Offset(x, kHeaderHeight),
-          Paint()..color = Colors.white.withValues(alpha: 0.3)..strokeWidth = 0.5);
       cur = cur.add(const Duration(days: 1));
     }
   }
 
+  void _drawHeader(Canvas canvas, Size size) {
+    // Always fill the visible viewport, regardless of horizontal scroll.
+    canvas.drawRect(
+      Rect.fromLTWH(_visLeft(), 0, _visRight(size) - _visLeft(), kHeaderHeight),
+      Paint()..color = _primary,
+    );
+
+    final totalDays = proyecto.fechaFin.difference(proyecto.fechaInicio).inDays + 14;
+    final hoy = DateTime.now();
+    final showEveryDay = pxPerDay >= 26;
+    String? lastMonthKey;
+    DateTime cur = proyecto.fechaInicio;
+
+    for (int d = 0; d < totalDays; d++) {
+      final x = d * pxPerDay;
+      final mk = '${cur.month}-${cur.year}';
+      if (lastMonthKey != mk) {
+        lastMonthKey = mk;
+        _text(canvas, '${_mes(cur.month)} ${cur.year}', Offset(x + 6, 5),
+            const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w700));
+      }
+      final isToday = _isSameDay(cur, hoy);
+      if (showEveryDay || cur.day == 1 || cur.day % 5 == 0 || isToday) {
+        if (isToday) {
+          canvas.drawRRect(
+            RRect.fromRectAndRadius(
+                Rect.fromLTWH(x + 2, 21, pxPerDay - 4, 17), const Radius.circular(4)),
+            Paint()..color = const Color(0xFFDC0026),
+          );
+        }
+        _text(canvas, cur.day.toString(), Offset(x + pxPerDay / 2 - 5, 24),
+            TextStyle(
+              color: isToday ? Colors.white : (_isWeekend(cur) ? Colors.red[200]! : Colors.white),
+              fontSize: 10,
+              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+            ));
+      }
+      canvas.drawLine(Offset(x, kHeaderHeight - 8), Offset(x, kHeaderHeight),
+          Paint()..color = Colors.white.withValues(alpha: 0.25)..strokeWidth = 0.5);
+      cur = cur.add(const Duration(days: 1));
+    }
+
+    canvas.drawLine(Offset(_visLeft(), kHeaderHeight), Offset(_visRight(size), kHeaderHeight),
+        Paint()..color = Colors.black.withValues(alpha: 0.1)..strokeWidth = 1);
+  }
+
   void _drawGrid(Canvas canvas, Size size) {
-    final gridP = Paint()..color = Colors.grey[300]!..strokeWidth = 0.5;
+    final mondayP = Paint()..color = Colors.grey[300]!..strokeWidth = 0.6;
+    final monthP = Paint()..color = Colors.grey[400]!..strokeWidth = 1.1;
     final totalDays = proyecto.fechaFin.difference(proyecto.fechaInicio).inDays + 14;
     DateTime cur = proyecto.fechaInicio;
     for (int d = 0; d < totalDays; d++) {
-      if (cur.day == 1 || cur.weekday == DateTime.monday) {
-        canvas.drawLine(
-            Offset(d * kPxPerDay, kHeaderHeight), Offset(d * kPxPerDay, size.height), gridP);
+      if (cur.day == 1) {
+        canvas.drawLine(Offset(d * pxPerDay, kHeaderHeight), Offset(d * pxPerDay, size.height), monthP);
+      } else if (cur.weekday == DateTime.monday) {
+        canvas.drawLine(Offset(d * pxPerDay, kHeaderHeight), Offset(d * pxPerDay, size.height), mondayP);
       }
       cur = cur.add(const Duration(days: 1));
     }
     for (int i = 0; i <= tareas.length; i++) {
       final y = kHeaderHeight + i * kRowHeight;
-      canvas.drawLine(Offset(-offsetX, y), Offset(size.width, y),
+      canvas.drawLine(Offset(_visLeft(), y), Offset(_visRight(size), y),
           Paint()..color = Colors.grey[200]!..strokeWidth = 0.5);
     }
   }
@@ -743,13 +930,16 @@ class _GanttPainter extends CustomPainter {
     for (int i = 0; i < tareas.length; i++) {
       final t = tareas[i];
       final isDrag = dragHit?.index == i;
+      final isHover = hoverIndex == i && !isDrag;
       final startD = _eInicio(t).difference(ps).inDays.toDouble();
       final endD = _eFin(t).difference(ps).inDays.toDouble();
-      final bL = startD * kPxPerDay;
-      final bR = max(endD, startD + 1) * kPxPerDay;
+      final bL = startD * pxPerDay;
+      final bR = max(endD, startD + 1) * pxPerDay;
       final bT = kHeaderHeight + i * kRowHeight + (kRowHeight - kBarHeight) / 2;
+      final rect = Rect.fromLTWH(bL, bT, bR - bL, kBarHeight);
+      final rr = RRect.fromRectAndRadius(rect, const Radius.circular(7));
 
-      final barColor = t.estado == 'hecho'
+      final baseColor = t.estado == 'hecho'
           ? Colors.grey[400]!
           : switch (t.prioridad) {
               'alta' => const Color(0xFFE53935),
@@ -757,25 +947,38 @@ class _GanttPainter extends CustomPainter {
               _ => const Color(0xFF1E88E5),
             };
 
-      final rr = RRect.fromRectAndRadius(
-          Rect.fromLTWH(bL, bT, bR - bL, kBarHeight), const Radius.circular(6));
+      // soft drop shadow
+      canvas.drawRRect(
+        rr.shift(const Offset(0, 2)),
+        Paint()
+          ..color = Colors.black.withValues(alpha: isDrag || isHover ? 0.20 : 0.12)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+      );
 
-      if (isDrag) {
+      canvas.drawRRect(
+        rr,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              baseColor.withValues(alpha: isDrag ? 1.0 : (isHover ? 0.95 : 0.88)),
+              baseColor.withValues(alpha: isDrag ? 0.85 : 0.72),
+            ],
+          ).createShader(rect),
+      );
+
+      if (isHover || isDrag) {
         canvas.drawRRect(
-          RRect.fromRectAndRadius(
-              Rect.fromLTWH(bL + 2, bT + 3, bR - bL, kBarHeight), const Radius.circular(6)),
-          Paint()..color = Colors.black.withValues(alpha: 0.2),
-        );
+            rr, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5..color = Colors.white.withValues(alpha: 0.85));
       }
 
-      canvas.drawRRect(rr, Paint()..color = barColor.withValues(alpha: isDrag ? 0.95 : 0.85));
-
       // Handles
-      final hp = Paint()..color = barColor.withValues(alpha: isDrag ? 1.0 : 0.65);
+      final hp = Paint()..color = baseColor.withValues(alpha: isDrag ? 1.0 : 0.65);
       canvas.drawRRect(
-          RRect.fromRectAndRadius(Rect.fromLTWH(bL, bT, 10, kBarHeight), const Radius.circular(6)), hp);
+          RRect.fromRectAndRadius(Rect.fromLTWH(bL, bT, 10, kBarHeight), const Radius.circular(7)), hp);
       canvas.drawRRect(
-          RRect.fromRectAndRadius(Rect.fromLTWH(bR - 10, bT, 10, kBarHeight), const Radius.circular(6)), hp);
+          RRect.fromRectAndRadius(Rect.fromLTWH(bR - 10, bT, 10, kBarHeight), const Radius.circular(7)), hp);
 
       if (bR - bL > 40) {
         _text(canvas, t.titulo, Offset(bL + 13, bT + 7),
@@ -789,30 +992,44 @@ class _GanttPainter extends CustomPainter {
     final hoy = DateTime.now();
     if (hoy.isBefore(proyecto.fechaInicio) ||
         hoy.isAfter(proyecto.fechaFin.add(const Duration(days: 14)))) return;
-    final x = hoy.difference(proyecto.fechaInicio).inDays * kPxPerDay;
+    final x = hoy.difference(proyecto.fechaInicio).inDays * pxPerDay + pxPerDay / 2;
     canvas.drawLine(Offset(x, kHeaderHeight), Offset(x, size.height),
-        Paint()..color = const Color(0xFFDC0026)..strokeWidth = 2);
-    _text(canvas, 'Hoy', Offset(x + 3, kHeaderHeight + 2),
-        const TextStyle(color: Color(0xFFDC0026), fontSize: 9, fontWeight: FontWeight.bold));
+        Paint()..color = const Color(0xFFDC0026).withValues(alpha: 0.55)..strokeWidth = 1.5);
+
+    const labelW = 38.0, labelH = 17.0;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+          Rect.fromLTWH(x - labelW / 2, kHeaderHeight + 5, labelW, labelH), const Radius.circular(9)),
+      Paint()..color = const Color(0xFFDC0026),
+    );
+    final tp = TextPainter(
+      text: const TextSpan(
+          text: 'HOY',
+          style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 0.3)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, Offset(x - tp.width / 2, kHeaderHeight + 5 + (labelH - tp.height) / 2));
   }
 
   void _drawLeftPanel(Canvas canvas, Size size) {
     canvas.drawRect(Rect.fromLTWH(0, 0, kLabelWidth, size.height), Paint()..color = Colors.white);
     canvas.drawRect(Rect.fromLTWH(0, 0, kLabelWidth, kHeaderHeight), Paint()..color = _primary);
-    _text(canvas, proyecto.nombre, const Offset(12, 7),
-        const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-        maxWidth: kLabelWidth - 16);
+    _text(canvas, proyecto.nombre, const Offset(14, 8),
+        const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
+        maxWidth: kLabelWidth - 18);
     _text(canvas, '${tareas.length} tarea${tareas.length != 1 ? 's' : ''}',
-        const Offset(12, 31),
-        const TextStyle(color: Colors.white70, fontSize: 10));
+        const Offset(14, 30),
+        const TextStyle(color: Colors.white70, fontSize: 10.5));
 
     for (int i = 0; i < tareas.length; i++) {
       final t = tareas[i];
       final y = kHeaderHeight + i * kRowHeight;
-      if (i.isEven) {
-        canvas.drawRect(Rect.fromLTWH(0, y, kLabelWidth, kRowHeight),
-            Paint()..color = const Color(0xFFF8F9FC));
-      }
+      final isHover = hoverIndex == i;
+      canvas.drawRect(
+        Rect.fromLTWH(0, y, kLabelWidth, kRowHeight),
+        Paint()..color = isHover ? const Color(0xFFEEF1FA) : (i.isEven ? const Color(0xFFF8F9FC) : Colors.white),
+      );
+
       final pc = t.estado == 'hecho'
           ? Colors.grey[400]!
           : switch (t.prioridad) {
@@ -820,18 +1037,39 @@ class _GanttPainter extends CustomPainter {
               'baja' => const Color(0xFF43A047),
               _ => const Color(0xFF1E88E5),
             };
-      canvas.drawCircle(Offset(10, y + kRowHeight / 2), 4, Paint()..color = pc);
-      _text(canvas, t.titulo, Offset(20, y + 10),
+      canvas.drawCircle(Offset(10, y + kRowHeight / 2 - 8), 3.5, Paint()..color = pc);
+
+      _text(canvas, t.titulo, Offset(20, y + 8),
           TextStyle(
-              fontSize: 12,
-              color: t.estado == 'hecho' ? Colors.grey[500]! : Colors.grey[800]!,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: t.estado == 'hecho' ? Colors.grey[500]! : Colors.grey[850]!,
               decoration: t.estado == 'hecho' ? TextDecoration.lineThrough : null),
-          maxWidth: kLabelWidth - 24);
-      if (t.asignadoANombre != null) {
-        _text(canvas, t.asignadoANombre!, Offset(20, y + 28),
-            TextStyle(fontSize: 10, color: Colors.grey[500]!), maxWidth: kLabelWidth - 24);
+          maxWidth: kLabelWidth - 58);
+
+      if (t.asignadoANombre != null && t.asignadoANombre!.isNotEmpty) {
+        final av = Offset(kLabelWidth - 22, y + 18);
+        canvas.drawCircle(av, 10, Paint()..color = pc.withValues(alpha: 0.16));
+        final initials = _initials(t.asignadoANombre!);
+        final tp = TextPainter(
+          text: TextSpan(text: initials, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: pc)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, av - Offset(tp.width / 2, tp.height / 2));
+        _text(canvas, t.asignadoANombre!, Offset(20, y + 27),
+            TextStyle(fontSize: 10, color: Colors.grey[500]!), maxWidth: kLabelWidth - 58);
+      } else {
+        _text(canvas, 'Sin asignar', Offset(20, y + 27),
+            TextStyle(fontSize: 10, color: Colors.grey[400]!, fontStyle: FontStyle.italic));
       }
     }
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.isEmpty || parts.first.isEmpty) return '?';
+    if (parts.length == 1) return parts[0].substring(0, min(2, parts[0].length)).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
   void _text(Canvas canvas, String text, Offset offset, TextStyle style, {double? maxWidth}) {
@@ -847,12 +1085,19 @@ class _GanttPainter extends CustomPainter {
   bool _isWeekend(DateTime d) =>
       d.weekday == DateTime.saturday || d.weekday == DateTime.sunday;
 
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
   String _mes(int m) =>
       const ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][m];
 
   @override
   bool shouldRepaint(_GanttPainter old) =>
-      old.offsetX != offsetX || old.tareas != tareas || old.dragHit != dragHit;
+      old.offsetX != offsetX ||
+      old.pxPerDay != pxPerDay ||
+      old.tareas != tareas ||
+      old.dragHit != dragHit ||
+      old.hoverIndex != hoverIndex;
 }
 
 // ── Diálogo tarea ──────────────────────────────────────────────────────────
