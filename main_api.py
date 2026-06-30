@@ -698,6 +698,22 @@ async def vender_equipo(equipo_id: str, req: EquipoVenderRequest, current_user: 
     await manager.broadcast({"tipo": "equipos", "accion": "vendido"})
     return {"status": "success"}
 
+@app.put("/equipos/{equipo_id}/baja")
+async def dar_de_baja_equipo(equipo_id: str, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE equipos SET estatus = 'Baja', empleado_asignado = NULL,
+                   rol_empleado = NULL WHERE id = %s""",
+                (equipo_id,)
+            )
+            connection.commit()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "equipos", "accion": "baja"})
+    return {"status": "success"}
+
 # ============================================================================
 # CATALOGOS: CATEGORIAS / AREAS / TIPOS DE EQUIPO
 # ============================================================================

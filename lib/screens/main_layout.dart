@@ -18,6 +18,8 @@ import 'admin_screen.dart';
 import 'reportes_screen.dart';
 import 'ai_screen.dart';
 import 'login_screen.dart';
+import 'proyectos_screen.dart';
+import 'tareas_screen.dart';
 
 const String kWsBaseUrl = 'wss://soporte.beta.com.mx/ws';
 
@@ -228,30 +230,39 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final bool tieneSoporte = widget.session.rol != 'Solo Desarrollo';
+    final bool tieneDesarrollo = widget.session.rol == 'Admin' ||
+        widget.session.rol == 'Enc. Desarrollo' ||
+        widget.session.rol == 'Desarrollador' ||
+        widget.session.rol == 'Solo Desarrollo';
+    final bool esAdmin = widget.session.rol == 'Admin';
+
     final screens = [
-      DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session, onNavigate: (i) => setState(() => _screenIndex = i)),
-      TicketsScreen(tickets: _tickets, usuarios: _usuarios, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
-      EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
-      PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
-      ChatScreen(
-        mensajes: _mensajes,
-        session: widget.session,
-        api: _api,
-        usuarios: _usuarios,
-        onVolver: () => setState(() => _screenIndex = _screenAnterior),
-        onBorrarMensaje: (id) async {
-          await _api.borrarMensaje(id);
-          setState(() {
-            _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: widget.session.username) : m).toList();
-          });
-        },
-      ),
-      if (widget.session.rol == 'Admin') ...[
-        UsersScreen(
-          usuarios: _usuarios,
+      if (tieneSoporte) ...[
+        DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session, onNavigate: (i) => setState(() => _screenIndex = i)),
+        TicketsScreen(tickets: _tickets, usuarios: _usuarios, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
+        EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
+        PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
+        ChatScreen(
+          mensajes: _mensajes,
+          session: widget.session,
           api: _api,
-          onRefresh: _cargarUsuarios,
+          usuarios: _usuarios,
+          onVolver: () => setState(() => _screenIndex = _screenAnterior),
+          onBorrarMensaje: (id) async {
+            await _api.borrarMensaje(id);
+            setState(() {
+              _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: widget.session.username) : m).toList();
+            });
+          },
         ),
+      ],
+      if (tieneDesarrollo) ...[
+        ProyectosScreen(api: _api, session: widget.session),
+        TareasScreen(api: _api, session: widget.session),
+      ],
+      if (esAdmin) ...[
+        UsersScreen(usuarios: _usuarios, api: _api, onRefresh: _cargarUsuarios),
         AdminScreen(api: _api),
         ReportesScreen(api: _api),
         AiScreen(api: _api, session: widget.session),
@@ -259,7 +270,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     ];
 
     return Scaffold(
-      floatingActionButton: _screenIndex != 4
+      floatingActionButton: tieneSoporte && _screenIndex != 4
           ? _buildFabChat()
           : null,
       appBar: AppBar(
@@ -280,38 +291,65 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           IconButton(icon: const Icon(Icons.logout_rounded), onPressed: _logout, tooltip: 'Cerrar sesión'),
         ],
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.monitor_heart, size: 36, color: Colors.white),
-                  const SizedBox(height: 8),
-                  Text(widget.session.nombreCompleto, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('Rol TI: ${widget.session.rol}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                ],
+      drawer: Builder(builder: (ctx) {
+        final bool tieneSoporte = widget.session.rol != 'Solo Desarrollo';
+        final bool tieneDesarrollo = widget.session.rol == 'Admin' ||
+            widget.session.rol == 'Enc. Desarrollo' ||
+            widget.session.rol == 'Desarrollador' ||
+            widget.session.rol == 'Solo Desarrollo';
+        final bool esAdmin = widget.session.rol == 'Admin';
+        final int soporteCount = tieneSoporte ? 5 : 0;
+        final int devOffset = tieneDesarrollo ? soporteCount : -1;
+        final int adminOffset = soporteCount + (tieneDesarrollo ? 2 : 0);
+
+        return Drawer(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              DrawerHeader(
+                decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.monitor_heart, size: 36, color: Colors.white),
+                    const SizedBox(height: 8),
+                    Text(widget.session.nombreCompleto,
+                        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text('${widget.session.rol}',
+                        style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  ],
+                ),
               ),
-            ),
-            _item(Icons.dashboard_rounded, 'Dashboard', 0),
-            _item(Icons.confirmation_number_rounded, 'Tickets / Asignaciones', 1),
-            _item(Icons.computer_rounded, 'Equipos / Responsivas', 2),
-            _item(Icons.backup_rounded, 'Control de Respaldos', 3),
-            _itemChat(),
-            if (widget.session.rol == 'Admin') ...[
-              const Divider(),
-              _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', 5),
-              _item(Icons.settings_rounded, 'Administración', 6),
-              _item(Icons.bar_chart_rounded, 'Reportes', 7),
-              _item(Icons.smart_toy_rounded, 'Asistente IA', 8),
+              // ── Soporte Técnico ──────────────────────────────────────
+              if (tieneSoporte) ...[
+                _sectionHeader('Soporte Técnico'),
+                _item(Icons.dashboard_rounded, 'Dashboard', 0),
+                _item(Icons.confirmation_number_rounded, 'Tickets / Asignaciones', 1),
+                _item(Icons.computer_rounded, 'Equipos / Responsivas', 2),
+                _item(Icons.backup_rounded, 'Control de Respaldos', 3),
+                _itemChat(),
+              ],
+              // ── Desarrollo ───────────────────────────────────────────
+              if (tieneDesarrollo) ...[
+                const Divider(indent: 16, endIndent: 16),
+                _sectionHeader('Desarrollo'),
+                _item(Icons.folder_special_rounded, 'Proyectos', devOffset),
+                _item(Icons.task_alt_rounded, 'Tareas', devOffset + 1),
+              ],
+              // ── Administración ───────────────────────────────────────
+              if (esAdmin) ...[
+                const Divider(indent: 16, endIndent: 16),
+                _sectionHeader('Administración'),
+                _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', adminOffset),
+                _item(Icons.settings_rounded, 'Administración', adminOffset + 1),
+                _item(Icons.bar_chart_rounded, 'Reportes', adminOffset + 2),
+                _item(Icons.smart_toy_rounded, 'Asistente IA', adminOffset + 3),
+              ],
             ],
-          ],
-        ),
-      ),
+          ),
+        );
+      }),
       body: _screenIndex < screens.length ? screens[_screenIndex] : screens[0],
     );
   }
@@ -353,6 +391,16 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       ],
     );
   }
+
+  Widget _sectionHeader(String label) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+        child: Text(label.toUpperCase(),
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+                color: Colors.grey[500])),
+      );
 
   ListTile _item(IconData icon, String label, int index) => ListTile(
         leading: Icon(icon),

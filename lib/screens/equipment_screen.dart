@@ -35,6 +35,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
   List<String> _tiposEquipo = ['Laptop', 'Desktop', 'Servidor', 'Celular', 'Bastón', 'Radio', 'Tablet'];
   List<String> _areasDisponibles = [];
 
+  bool get _puedeGestionarActivos =>
+      widget.session.rol == 'Admin' || widget.session.rol == 'Técnico Sr.';
+
   @override
   void initState() {
     super.initState();
@@ -287,6 +290,41 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     );
   }
 
+  void _darDeBajaHardware(Equipo eq) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(children: [
+          Icon(Icons.remove_circle_outline_rounded, color: Colors.red),
+          SizedBox(width: 8),
+          Text('Dar de baja'),
+        ]),
+        content: Text('¿Dar de baja "${eq.marca} - ${eq.modelo}"?\nNo volverá a aparecer en el inventario.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await widget.api.darDeBajaEquipo(eq.id);
+                widget.onRefresh();
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Activo dado de baja.')),
+                );
+              } catch (e) {
+                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+                );
+              }
+            },
+            child: const Text('Dar de baja'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _imprimirResponsiva(Equipo eq) {
     final now = DateTime.now();
     final dia = now.day.toString().padLeft(2, '0');
@@ -395,7 +433,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<Equipo> lista = List.from(widget.inventario);
+    List<Equipo> lista = widget.inventario.where((e) => e.estatus != 'Baja').toList();
 
     final busq = _busquedaCtrl.text.toLowerCase();
     if (busq.isNotEmpty) {
@@ -435,18 +473,19 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     ],
                   ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () => abrirDialogoNuevoEquipo(
-                    context: context,
-                    api: widget.api,
-                    onRefresh: widget.onRefresh,
-                    tiposDisponibles: _tiposEquipo,
-                    areas: _areasDisponibles,
+                if (widget.session.rol == 'Admin')
+                  ElevatedButton.icon(
+                    onPressed: () => abrirDialogoNuevoEquipo(
+                      context: context,
+                      api: widget.api,
+                      onRefresh: widget.onRefresh,
+                      tiposDisponibles: _tiposEquipo,
+                      areas: _areasDisponibles,
+                    ),
+                    icon: const Icon(Icons.computer_rounded, size: 16),
+                    label: const Text('Alta Equipo'),
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
                   ),
-                  icon: const Icon(Icons.computer_rounded, size: 16),
-                  label: const Text('Alta Equipo'),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A2B72), foregroundColor: Colors.white),
-                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -593,7 +632,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                           ],
                                         ),
                                       ),
-                                    if (widget.session.rol == 'Admin') ...[
+                                    if (_puedeGestionarActivos) ...[
                                       const Divider(),
                                       Wrap(
                                         spacing: 8,
@@ -630,6 +669,14 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                               onPressed: () => _venderHardware(eq),
                                               icon: const Icon(Icons.sell_rounded, size: 16),
                                               label: const Text('Marcar como Vendido', style: TextStyle(fontSize: 12)),
+                                            ),
+                                          if (!vendido)
+                                            ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.grey.shade100, foregroundColor: Colors.grey.shade700),
+                                              onPressed: () => _darDeBajaHardware(eq),
+                                              icon: const Icon(Icons.remove_circle_outline_rounded, size: 16),
+                                              label: const Text('Dar de baja', style: TextStyle(fontSize: 12)),
                                             ),
                                         ],
                                       ),

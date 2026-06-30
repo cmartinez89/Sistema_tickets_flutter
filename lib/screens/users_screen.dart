@@ -79,6 +79,10 @@ class _UsersScreenState extends State<UsersScreen> {
                     items: const [
                       DropdownMenuItem(value: 'Admin', child: Text('Admin')),
                       DropdownMenuItem(value: 'Técnico', child: Text('Técnico')),
+                      DropdownMenuItem(value: 'Técnico Sr.', child: Text('Técnico Sr.')),
+                      DropdownMenuItem(value: 'Enc. Desarrollo', child: Text('Enc. Desarrollo')),
+                      DropdownMenuItem(value: 'Desarrollador', child: Text('Desarrollador')),
+                      DropdownMenuItem(value: 'Solo Desarrollo', child: Text('Solo Desarrollo')),
                     ],
                     onChanged: (v) => setLocal(() => rol = v!),
                   ),

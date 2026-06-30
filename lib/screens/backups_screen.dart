@@ -28,6 +28,8 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
   final _busquedaCtrl = TextEditingController();
 
   static const _alertas = ['Todos', 'Sin respaldo', 'Al día', 'Atrasado', 'Crítico'];
+  static const _estatusSinRespaldo = {'Baja', 'Vendido', 'Fuera de Servicio'};
+  static const _tiposConRespaldo = {'pc', 'desktop', 'laptop', 'servidor'};
 
   @override
   void dispose() {
@@ -47,6 +49,9 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
   List<Equipo> get _inventarioFiltrado {
     final busq = _busquedaCtrl.text.toLowerCase().trim();
     return widget.inventario.where((eq) {
+      // Solo equipos activos y de tipos que se respaldan
+      if (_estatusSinRespaldo.contains(eq.estatus)) return false;
+      if (!_tiposConRespaldo.contains(eq.tipo.toLowerCase())) return false;
       // Texto búsqueda
       if (busq.isNotEmpty) {
         final nombre = (eq.empleadoAsignado ?? '').toLowerCase();

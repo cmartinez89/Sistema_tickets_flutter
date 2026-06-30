@@ -4,6 +4,8 @@ import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
 import '../models/chat_message_model.dart';
 import '../models/usuario_model.dart';
+import '../models/proyecto_model.dart';
+import '../models/tarea_model.dart';
 
 const String kApiUrl = 'https://soporte.beta.com.mx/api';
 const Duration kTimeout = Duration(seconds: 15);
@@ -124,6 +126,11 @@ class ApiService {
   Future<void> actualizarRespaldo(String id, DateTime fecha) async {
     final res = await http.put(Uri.parse('$kApiUrl/equipos/$id/backup'), headers: _headers, body: jsonEncode({'ultimoRespaldo': fecha.toIso8601String()})).timeout(kTimeout);
     if (res.statusCode != 200) throw Exception('Error al actualizar respaldo');
+  }
+
+  Future<void> darDeBajaEquipo(String id) async {
+    final res = await http.put(Uri.parse('$kApiUrl/equipos/$id/baja'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al dar de baja el equipo');
   }
 
   // ── Usuarios ─────────────────────────────────────────────────────────────────
@@ -272,6 +279,77 @@ class ApiService {
   Future<void> eliminarTipoEquipo(int id) async {
     final res = await http.delete(Uri.parse('$kApiUrl/tipos-equipo/$id'), headers: _headers).timeout(kTimeout);
     if (res.statusCode != 200) throw Exception('Error al eliminar tipo de equipo');
+  }
+
+  // ── Proyectos ─────────────────────────────────────────────────────────────────
+
+  String _parseError(http.Response res, String fallback) {
+    try { return (jsonDecode(res.body) as Map)['detail'] as String? ?? fallback; }
+    catch (_) { return '$fallback (${res.statusCode})'; }
+  }
+
+  Future<List<Proyecto>> fetchProyectos() async {
+    final res = await http.get(Uri.parse('$kApiUrl/proyectos'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar proyectos');
+    return (jsonDecode(res.body) as List).map((e) => Proyecto.fromMap(e)).toList();
+  }
+
+  Future<Proyecto> crearProyecto(Map<String, dynamic> data) async {
+    final res = await http.post(Uri.parse('$kApiUrl/proyectos'), headers: _headers, body: jsonEncode(data)).timeout(kTimeout);
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_parseError(res, 'Error al crear proyecto'));
+    return Proyecto.fromMap(jsonDecode(res.body));
+  }
+
+  Future<Proyecto> actualizarProyecto(int id, Map<String, dynamic> data) async {
+    final res = await http.put(Uri.parse('$kApiUrl/proyectos/$id'), headers: _headers, body: jsonEncode(data)).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception(_parseError(res, 'Error al actualizar proyecto'));
+    return Proyecto.fromMap(jsonDecode(res.body));
+  }
+
+  Future<void> eliminarProyecto(int id) async {
+    final res = await http.delete(Uri.parse('$kApiUrl/proyectos/$id'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al eliminar proyecto');
+  }
+
+  // ── Tareas ────────────────────────────────────────────────────────────────────
+
+  Future<List<Tarea>> fetchTareas({int? proyectoId}) async {
+    final url = proyectoId != null
+        ? '$kApiUrl/tareas?proyectoId=$proyectoId'
+        : '$kApiUrl/tareas';
+    final res = await http.get(Uri.parse(url), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar tareas');
+    return (jsonDecode(res.body) as List).map((e) => Tarea.fromMap(e)).toList();
+  }
+
+  Future<Tarea> crearTarea(Map<String, dynamic> data) async {
+    final res = await http.post(Uri.parse('$kApiUrl/tareas'), headers: _headers, body: jsonEncode(data)).timeout(kTimeout);
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_parseError(res, 'Error al crear tarea'));
+    return Tarea.fromMap(jsonDecode(res.body));
+  }
+
+  Future<Tarea> actualizarTarea(int id, Map<String, dynamic> data) async {
+    final res = await http.put(Uri.parse('$kApiUrl/tareas/$id'), headers: _headers, body: jsonEncode(data)).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception(_parseError(res, 'Error al actualizar tarea'));
+    return Tarea.fromMap(jsonDecode(res.body));
+  }
+
+  Future<void> actualizarEstadoTarea(int id, String estado) async {
+    final res = await http.patch(Uri.parse('$kApiUrl/tareas/$id/estado'), headers: _headers, body: jsonEncode({'estado': estado})).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al actualizar estado');
+  }
+
+  Future<void> actualizarFechasTarea(int id, DateTime inicio, DateTime fin) async {
+    final res = await http.patch(Uri.parse('$kApiUrl/tareas/$id/fechas'), headers: _headers, body: jsonEncode({
+      'fechaInicio': inicio.toIso8601String().substring(0, 10),
+      'fechaFin': fin.toIso8601String().substring(0, 10),
+    })).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al actualizar fechas');
+  }
+
+  Future<void> eliminarTarea(int id) async {
+    final res = await http.delete(Uri.parse('$kApiUrl/tareas/$id'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al eliminar tarea');
   }
 
   // ── IA ────────────────────────────────────────────────────────────────────────
