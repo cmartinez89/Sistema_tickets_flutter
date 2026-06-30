@@ -1116,8 +1116,8 @@ def get_reportes(current_user: dict = Depends(get_current_user)):
 
             # Por técnico
             cursor.execute(
-                """SELECT COALESCE(asignado_a, 'Sin asignar') AS tecnico, COUNT(*) AS total
-                   FROM tickets GROUP BY asignado_a ORDER BY total DESC"""
+                """SELECT COALESCE(NULLIF(asignado_a, ''), 'Sin asignar') AS tecnico, COUNT(*) AS total
+                   FROM tickets GROUP BY COALESCE(NULLIF(asignado_a, ''), 'Sin asignar') ORDER BY total DESC"""
             )
             por_tecnico = [{"tecnico": r['tecnico'], "total": r['total']} for r in cursor.fetchall()]
 
