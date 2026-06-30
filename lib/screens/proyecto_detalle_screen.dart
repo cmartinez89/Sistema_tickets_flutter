@@ -462,6 +462,24 @@ class _CardBody extends StatelessWidget {
 
 // ── Gantt ─────────────────────────────────────────────────────────────────────
 
+/// Stable per-task color so adjacent bars/rows are visually distinguishable
+/// regardless of priority. Keyed by task id, not list position, so it
+/// doesn't shuffle when the task list re-sorts. Completed tasks stay gray.
+const _kTaskPalette = [
+  Color(0xFF1E88E5), Color(0xFF8E24AA), Color(0xFF00897B), Color(0xFFEF6C00),
+  Color(0xFFD81B60), Color(0xFF3949AB), Color(0xFF558B2F), Color(0xFF6D4C41),
+  Color(0xFF00ACC1), Color(0xFFC62828), Color(0xFF5E35B1), Color(0xFF2E7D32),
+];
+
+Color _taskColor(Tarea t) =>
+    t.estado == 'hecho' ? Colors.grey[400]! : _kTaskPalette[t.id % _kTaskPalette.length];
+
+Color _prioAccentColor(String prioridad) => switch (prioridad) {
+      'alta' => const Color(0xFFE53935),
+      'baja' => const Color(0xFF43A047),
+      _ => Colors.transparent,
+    };
+
 enum _DragType { body, leftEdge, rightEdge }
 
 class _DragHit {
@@ -504,6 +522,7 @@ class _GanttViewState extends State<_GanttView> {
   DateTime? _origFin;
   int? _hoverIndex;
   Offset? _hoverPos;
+  int? _selectedIndex;
   late List<Tarea> _tareas;
 
   @override
@@ -577,6 +596,36 @@ class _GanttViewState extends State<_GanttView> {
       return i;
     }
     return null;
+  }
+
+  /// Looser hit test used for tap-to-select: any click within a row's
+  /// vertical band selects it, whether on the bar, empty timeline space, or
+  /// the left-panel label — clicking a task's name should find it too.
+  int? _hitTestAnyRow(Offset pos) {
+    if (pos.dy < kHeaderHeight) return null;
+    final row = ((pos.dy - kHeaderHeight) / kRowHeight).floor();
+    if (row < 0 || row >= _tareas.length) return null;
+    return row;
+  }
+
+  void _onTapUp(TapUpDetails d) {
+    final hit = _hitTestAnyRow(d.localPosition);
+    setState(() => _selectedIndex = (_selectedIndex == hit) ? null : hit);
+    if (_selectedIndex != null) _scrollToTask(_selectedIndex!);
+  }
+
+  void _scrollToTask(int index) {
+    final t = _tareas[index];
+    final ps = widget.proyecto.fechaInicio;
+    final startD = _efectivaInicio(t).difference(ps).inDays.toDouble();
+    final endD = _efectivaFin(t).difference(ps).inDays.toDouble();
+    final bL = startD * _pxPerDay;
+    final bR = max(endD, startD + 1) * _pxPerDay;
+    final chartW = _chartWidth ?? 600.0;
+    if (bL < _offsetX || bR > _offsetX + chartW) {
+      final center = (bL + bR) / 2;
+      setState(() => _offsetX = (center - chartW / 2).clamp(0.0, _maxOffsetX));
+    }
   }
 
   void _onPanStart(DragStartDetails d) {
@@ -668,9 +717,11 @@ class _GanttViewState extends State<_GanttView> {
         return Stack(
           children: [
             MouseRegion(
+              cursor: _hoverIndex != null ? SystemMouseCursors.click : MouseCursor.defer,
               onHover: _onHover,
               onExit: (_) => setState(() => _hoverIndex = null),
               child: GestureDetector(
+                onTapUp: _onTapUp,
                 onPanStart: _onPanStart,
                 onPanUpdate: _onPanUpdate,
                 onPanEnd: _onPanEnd,
@@ -683,6 +734,7 @@ class _GanttViewState extends State<_GanttView> {
                     pxPerDay: _pxPerDay,
                     dragHit: _dragHit,
                     hoverIndex: _hoverIndex,
+                    selectedIndex: _selectedIndex,
                   ),
                 ),
               ),
@@ -795,12 +847,14 @@ class _GanttPainter extends CustomPainter {
   final double pxPerDay;
   final _DragHit? dragHit;
   final int? hoverIndex;
+  final int? selectedIndex;
 
   static const kLabelWidth = 180.0;
   static const kHeaderHeight = 52.0;
   static const kRowHeight = 48.0;
   static const kBarHeight = 28.0;
   static const _primary = Color(0xFF1A2B72);
+  static const _selectColor = Color(0xFFFFC107);
 
   const _GanttPainter({
     required this.proyecto,
@@ -809,6 +863,7 @@ class _GanttPainter extends CustomPainter {
     required this.pxPerDay,
     this.dragHit,
     this.hoverIndex,
+    this.selectedIndex,
   });
 
   DateTime _eInicio(Tarea t) => t.fechaInicio ?? proyecto.fechaInicio;
@@ -931,6 +986,8 @@ class _GanttPainter extends CustomPainter {
       final t = tareas[i];
       final isDrag = dragHit?.index == i;
       final isHover = hoverIndex == i && !isDrag;
+      final isSelected = selectedIndex == i;
+      final isDimmed = selectedIndex != null && !isSelected;
       final startD = _eInicio(t).difference(ps).inDays.toDouble();
       final endD = _eFin(t).difference(ps).inDays.toDouble();
       final bL = startD * pxPerDay;
@@ -938,20 +995,24 @@ class _GanttPainter extends CustomPainter {
       final bT = kHeaderHeight + i * kRowHeight + (kRowHeight - kBarHeight) / 2;
       final rect = Rect.fromLTWH(bL, bT, bR - bL, kBarHeight);
       final rr = RRect.fromRectAndRadius(rect, const Radius.circular(7));
+      final baseColor = _taskColor(t);
+      final fade = isDimmed ? 0.35 : 1.0;
 
-      final baseColor = t.estado == 'hecho'
-          ? Colors.grey[400]!
-          : switch (t.prioridad) {
-              'alta' => const Color(0xFFE53935),
-              'baja' => const Color(0xFF43A047),
-              _ => const Color(0xFF1E88E5),
-            };
+      // selection glow (drawn first, behind everything)
+      if (isSelected) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect.inflate(3), const Radius.circular(9)),
+          Paint()
+            ..color = _selectColor.withValues(alpha: 0.55)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+      }
 
       // soft drop shadow
       canvas.drawRRect(
         rr.shift(const Offset(0, 2)),
         Paint()
-          ..color = Colors.black.withValues(alpha: isDrag || isHover ? 0.20 : 0.12)
+          ..color = Colors.black.withValues(alpha: (isDrag || isHover ? 0.20 : 0.12) * fade)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
       );
 
@@ -962,19 +1023,31 @@ class _GanttPainter extends CustomPainter {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              baseColor.withValues(alpha: isDrag ? 1.0 : (isHover ? 0.95 : 0.88)),
-              baseColor.withValues(alpha: isDrag ? 0.85 : 0.72),
+              baseColor.withValues(alpha: (isDrag ? 1.0 : (isHover ? 0.95 : 0.88)) * fade),
+              baseColor.withValues(alpha: (isDrag ? 0.85 : 0.72) * fade),
             ],
           ).createShader(rect),
       );
 
-      if (isHover || isDrag) {
+      // priority accent stripe at the left edge (clipped to the bar's rounded shape)
+      final accent = _prioAccentColor(t.prioridad);
+      if (accent != Colors.transparent && t.estado != 'hecho') {
+        canvas.save();
+        canvas.clipRRect(rr);
+        canvas.drawRect(Rect.fromLTWH(bL, bT, 4, kBarHeight), Paint()..color = accent.withValues(alpha: fade));
+        canvas.restore();
+      }
+
+      if (isSelected) {
+        canvas.drawRRect(
+            rr, Paint()..style = PaintingStyle.stroke..strokeWidth = 2..color = _selectColor);
+      } else if (isHover || isDrag) {
         canvas.drawRRect(
             rr, Paint()..style = PaintingStyle.stroke..strokeWidth = 1.5..color = Colors.white.withValues(alpha: 0.85));
       }
 
       // Handles
-      final hp = Paint()..color = baseColor.withValues(alpha: isDrag ? 1.0 : 0.65);
+      final hp = Paint()..color = baseColor.withValues(alpha: (isDrag ? 1.0 : 0.65) * fade);
       canvas.drawRRect(
           RRect.fromRectAndRadius(Rect.fromLTWH(bL, bT, 10, kBarHeight), const Radius.circular(7)), hp);
       canvas.drawRRect(
@@ -982,7 +1055,7 @@ class _GanttPainter extends CustomPainter {
 
       if (bR - bL > 40) {
         _text(canvas, t.titulo, Offset(bL + 13, bT + 7),
-            const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+            TextStyle(color: Colors.white.withValues(alpha: fade), fontSize: 11, fontWeight: FontWeight.w600),
             maxWidth: bR - bL - 26);
       }
     }
@@ -1025,19 +1098,21 @@ class _GanttPainter extends CustomPainter {
       final t = tareas[i];
       final y = kHeaderHeight + i * kRowHeight;
       final isHover = hoverIndex == i;
+      final isSelected = selectedIndex == i;
+      final pc = _taskColor(t);
+
       canvas.drawRect(
         Rect.fromLTWH(0, y, kLabelWidth, kRowHeight),
-        Paint()..color = isHover ? const Color(0xFFEEF1FA) : (i.isEven ? const Color(0xFFF8F9FC) : Colors.white),
+        Paint()
+          ..color = isSelected
+              ? pc.withValues(alpha: 0.14)
+              : (isHover ? const Color(0xFFEEF1FA) : (i.isEven ? const Color(0xFFF8F9FC) : Colors.white)),
       );
+      if (isSelected) {
+        canvas.drawRect(Rect.fromLTWH(0, y, 3, kRowHeight), Paint()..color = _selectColor);
+      }
 
-      final pc = t.estado == 'hecho'
-          ? Colors.grey[400]!
-          : switch (t.prioridad) {
-              'alta' => const Color(0xFFE53935),
-              'baja' => const Color(0xFF43A047),
-              _ => const Color(0xFF1E88E5),
-            };
-      canvas.drawCircle(Offset(10, y + kRowHeight / 2 - 8), 3.5, Paint()..color = pc);
+      canvas.drawCircle(Offset(14, y + kRowHeight / 2 - 8), 4, Paint()..color = pc);
 
       _text(canvas, t.titulo, Offset(20, y + 8),
           TextStyle(
@@ -1097,7 +1172,8 @@ class _GanttPainter extends CustomPainter {
       old.pxPerDay != pxPerDay ||
       old.tareas != tareas ||
       old.dragHit != dragHit ||
-      old.hoverIndex != hoverIndex;
+      old.hoverIndex != hoverIndex ||
+      old.selectedIndex != selectedIndex;
 }
 
 // ── Diálogo tarea ──────────────────────────────────────────────────────────
