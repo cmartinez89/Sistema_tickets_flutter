@@ -11,6 +11,9 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Build failed" -ForegroundColor Red; exit 
 Write-Host "Deploying to server..." -ForegroundColor Cyan
 scp -i $Key -o StrictHostKeyChecking=no -r build/web/* "${SERVER}:${WEBROOT}/"
 
+Write-Host "Fixing permissions (scp desde Windows deja carpetas sin permiso de lectura para nginx)..." -ForegroundColor Cyan
+ssh -i $Key -o StrictHostKeyChecking=no $SERVER "sudo find $WEBROOT -type d -exec chmod 755 {} \; && sudo find $WEBROOT -type f -exec chmod 644 {} \;"
+
 Write-Host "Fixing service worker reload loop..." -ForegroundColor Cyan
 $fixScript = @'
 import re
