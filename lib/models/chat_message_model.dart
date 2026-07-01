@@ -1,3 +1,13 @@
+DateTime _parseFechaUtc(dynamic raw) {
+  final s = raw?.toString() ?? '';
+  if (s.isEmpty) return DateTime.now();
+  // El backend envía datetime.now().isoformat() sin sufijo de zona horaria,
+  // pero el servidor corre en UTC. Sin la 'Z', DateTime.parse lo interpretaría
+  // como hora local y desplazaría la hora mostrada.
+  final utcStr = (s.endsWith('Z') || RegExp(r'[+-]\d\d:\d\d$').hasMatch(s)) ? s : '${s}Z';
+  return DateTime.tryParse(utcStr)?.toLocal() ?? DateTime.now();
+}
+
 class ChatMessage {
   final String id;
   final String deUsuario;
@@ -24,7 +34,7 @@ class ChatMessage {
     deUsuario: map['deUsuario'] ?? '',
     nombreCompleto: map['nombreCompleto'] ?? '',
     texto: map['texto'] ?? '',
-    fecha: DateTime.tryParse(map['fecha'] ?? '') ?? DateTime.now(),
+    fecha: _parseFechaUtc(map['fecha']),
     imagen: map['imagen'],
     borrado: map['borrado'] == true || map['borrado'] == 1,
     borradoPor: map['borradoPor'],

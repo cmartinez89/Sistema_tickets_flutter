@@ -27,6 +27,49 @@ Color _colorDeUsuario(String username) {
   return _kPaletaColores[hash % _kPaletaColores.length];
 }
 
+const _kMeses = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+
+bool _mismoDia(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+String _etiquetaFecha(DateTime fecha) {
+  final hoy = DateTime.now();
+  final ayer = hoy.subtract(const Duration(days: 1));
+  if (_mismoDia(fecha, hoy)) return 'Hoy';
+  if (_mismoDia(fecha, ayer)) return 'Ayer';
+  final mismoAnio = fecha.year == hoy.year;
+  return '${fecha.day} de ${_kMeses[fecha.month - 1]}${mismoAnio ? '' : ' de ${fecha.year}'}';
+}
+
+class _SeparadorFecha extends StatelessWidget {
+  final DateTime fecha;
+
+  const _SeparadorFecha({required this.fecha});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 3, offset: const Offset(0, 1))],
+          ),
+          child: Text(
+            _etiquetaFecha(fecha),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 Future<String?> _pickChatImage() async {
   try {
     final picker = ImagePicker();
@@ -280,19 +323,26 @@ class _ChatScreenState extends State<ChatScreen> {
                     itemBuilder: (_, i) {
                       final msg = widget.mensajes[i];
                       final esMio = msg.deUsuario == widget.session.username;
+                      final nuevoDia = i == 0 || !_mismoDia(widget.mensajes[i - 1].fecha, msg.fecha);
                       final mostrarNombre = !esMio &&
-                          (i == 0 || widget.mensajes[i - 1].deUsuario != msg.deUsuario);
+                          (nuevoDia || widget.mensajes[i - 1].deUsuario != msg.deUsuario);
 
-                      return GestureDetector(
-                        onLongPress: _puedeBorar(msg) ? () => _confirmarBorrado(msg) : null,
-                        child: _BurbujaMensaje(
-                          mensaje: msg,
-                          esMio: esMio,
-                          esAdmin: esAdmin,
-                          mostrarNombre: mostrarNombre,
-                          colorPrimary: primary,
-                          colorUsuario: _colorDeUsuario(msg.deUsuario),
-                        ),
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (nuevoDia) _SeparadorFecha(fecha: msg.fecha),
+                          GestureDetector(
+                            onLongPress: _puedeBorar(msg) ? () => _confirmarBorrado(msg) : null,
+                            child: _BurbujaMensaje(
+                              mensaje: msg,
+                              esMio: esMio,
+                              esAdmin: esAdmin,
+                              mostrarNombre: mostrarNombre,
+                              colorPrimary: primary,
+                              colorUsuario: _colorDeUsuario(msg.deUsuario),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
