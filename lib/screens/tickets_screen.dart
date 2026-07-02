@@ -86,8 +86,24 @@ class _TicketsScreenState extends State<TicketsScreen> {
     super.dispose();
   }
 
+  bool get _tieneAccesoTotal =>
+      widget.session.rol == 'Admin' || widget.session.rol == 'Técnico Sr.';
+
   List<String> get _kTecnicos =>
       ['Sin Asignar', ...widget.usuarios.map((u) => u.username)];
+
+  List<String> _estadosSiguientes(String actual) {
+    switch (actual) {
+      case 'Pendiente':
+        return ['Pendiente', 'En Proceso', 'Escalado', 'Resuelto'];
+      case 'En Proceso':
+        return ['En Proceso', 'Escalado', 'Resuelto'];
+      case 'Escalado':
+        return ['Escalado', 'Resuelto'];
+      default:
+        return [actual];
+    }
+  }
 
   String _nombreTecnico(String username) {
     if (username == 'Sin Asignar') return 'Sin Asignar';
@@ -161,6 +177,10 @@ class _TicketsScreenState extends State<TicketsScreen> {
     bool loadingHistorial = true;
     String? aiSugerencia;
     bool cargandoAi = false;
+    List<Map<String, dynamic>> comentarios = [];
+    bool loadingComentarios = true;
+    bool enviandoComentario = false;
+    final comentarioCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -173,6 +193,33 @@ class _TicketsScreenState extends State<TicketsScreen> {
             }).catchError((_) {
               if (ctx.mounted) setDs(() => loadingHistorial = false);
             });
+          }
+          if (loadingComentarios) {
+            widget.api.fetchComentarios(t.id).then((c) {
+              if (ctx.mounted) setDs(() { comentarios = c; loadingComentarios = false; });
+            }).catchError((_) {
+              if (ctx.mounted) setDs(() => loadingComentarios = false);
+            });
+          }
+
+          Future<void> enviarComentario() async {
+            final texto = comentarioCtrl.text.trim();
+            if (texto.isEmpty) return;
+            setDs(() => enviandoComentario = true);
+            try {
+              await widget.api.agregarComentario(t.id, texto);
+              comentarioCtrl.clear();
+              final nuevos = await widget.api.fetchComentarios(t.id);
+              if (ctx.mounted) {
+                setDs(() { comentarios = nuevos; enviandoComentario = false; });
+              }
+            } catch (e) {
+              if (ctx.mounted) setDs(() => enviandoComentario = false);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')));
+              }
+            }
           }
 
           Future<void> pedirSugerenciaAi() async {
@@ -332,24 +379,122 @@ class _TicketsScreenState extends State<TicketsScreen> {
                       const Divider(height: 24),
                     ],
 
+                    // Comentarios
+                    const Text(
+                      'Comentarios',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 4),
+                    if (loadingComentarios)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2)),
+                      )
+                    else if (comentarios.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text('Sin comentarios',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade400)),
+                      )
+                    else
+                      ...comentarios.map((c) => Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      c['nombreCompleto']?.toString() ??
+                                          c['usuario']?.toString() ??
+                                          '',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11),
+                                    ),
+                                    Text(
+                                      _formatFecha(DateTime.tryParse(
+                                              c['fecha']?.toString() ??
+                                                  '') ??
+                                          DateTime.now()),
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.grey.shade500),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(c['texto']?.toString() ?? '',
+                                    style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          )),
+                    if (t.estado != 'Resuelto') ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: comentarioCtrl,
+                              minLines: 1,
+                              maxLines: 3,
+                              decoration: const InputDecoration(
+                                hintText: 'Agregar comentario...',
+                                isDense: true,
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          enviandoComentario
+                              ? const Padding(
+                                  padding: EdgeInsets.all(10),
+                                  child: SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2)),
+                                )
+                              : IconButton(
+                                  icon: const Icon(Icons.send_rounded),
+                                  onPressed: enviarComentario,
+                                ),
+                        ],
+                      ),
+                    ],
+                    const Divider(height: 24),
+
                     DropdownButtonFormField<String>(
                       value: nuevoEstado,
                       decoration: const InputDecoration(
                           labelText: 'Estado',
-                          border: OutlineInputBorder()),
-                      items: [
-                        'Pendiente',
-                        'En Proceso',
-                        'Escalado',
-                        'Resuelto'
-                      ]
+                          border: OutlineInputBorder(),
+                          helperText: 'El estado solo avanza, no puede regresar'),
+                      items: _estadosSiguientes(t.estado)
                           .map((e) => DropdownMenuItem(
                               value: e, child: Text(e)))
                           .toList(),
-                      onChanged: (v) =>
-                          setDs(() => nuevoEstado = v!),
+                      onChanged: t.estado == 'Resuelto'
+                          ? null
+                          : (v) => setDs(() => nuevoEstado = v!),
                     ),
-                    if (widget.session.rol == 'Admin') ...[
+                    if (_tieneAccesoTotal) ...[
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         value: nuevoAsignado,
@@ -552,6 +697,30 @@ class _TicketsScreenState extends State<TicketsScreen> {
                 onPressed: guardando
                     ? null
                     : () async {
+                        if (nuevoEstado == 'Resuelto' &&
+                            t.estado != 'Resuelto') {
+                          final confirmado = await showDialog<bool>(
+                            context: ctx,
+                            builder: (c2) => AlertDialog(
+                              title: const Text('¿Resolver este ticket?'),
+                              content: Text(
+                                  'Se abrió el ${_formatFecha(t.fecha)} (hace ${_tiempoDesde(t.fecha)}). '
+                                  'Al confirmar se registrará este momento como el cierre y el ticket ya no podrá modificarse. '
+                                  '¿Estás seguro de que fue resuelto?'),
+                              actions: [
+                                TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(c2, false),
+                                    child: const Text('Cancelar')),
+                                ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.pop(c2, true),
+                                    child: const Text('Sí, resolver')),
+                              ],
+                            ),
+                          );
+                          if (confirmado != true) return;
+                        }
                         setDs(() => guardando = true);
                         try {
                           if (nuevoEstado == 'Resuelto') {
@@ -720,7 +889,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                       ),
                     if (_areas.isNotEmpty)
                       const SizedBox(height: 12),
-                    if (widget.session.rol == 'Admin')
+                    if (_tieneAccesoTotal)
                       DropdownButtonFormField<String>(
                         value: _asignado,
                         decoration: const InputDecoration(
@@ -734,7 +903,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                         onChanged: (v) =>
                             setDs(() => _asignado = v!),
                       ),
-                    if (widget.session.rol == 'Admin')
+                    if (_tieneAccesoTotal)
                       const SizedBox(height: 12),
                     TextFormField(
                       controller: _descCtrl,
@@ -766,10 +935,9 @@ class _TicketsScreenState extends State<TicketsScreen> {
                   : () async {
                       if (!_formKey.currentState!.validate()) return;
                       setDs(() => _clearSession = true);
-                      final asignado =
-                          widget.session.rol == 'Admin'
-                              ? _asignado
-                              : widget.session.username;
+                      final asignado = _tieneAccesoTotal
+                          ? _asignado
+                          : widget.session.username;
                       final nuevo = Ticket(
                         id: '',
                         usuario: _usuarioCtrl.text.trim(),
@@ -807,7 +975,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    List<Ticket> lista = widget.session.rol == 'Admin'
+    List<Ticket> lista = _tieneAccesoTotal
         ? widget.tickets
         : widget.tickets
             .where((t) =>

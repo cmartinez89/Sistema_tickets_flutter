@@ -473,7 +473,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     ],
                   ),
                 ),
-                if (widget.session.rol == 'Admin')
+                if (_puedeGestionarActivos)
                   ElevatedButton.icon(
                     onPressed: () => abrirDialogoNuevoEquipo(
                       context: context,
@@ -638,6 +638,20 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                         spacing: 8,
                                         runSpacing: 8,
                                         children: [
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.grey.shade200, foregroundColor: Colors.blueGrey.shade800),
+                                            onPressed: () => abrirDialogoNuevoEquipo(
+                                              context: context,
+                                              api: widget.api,
+                                              onRefresh: widget.onRefresh,
+                                              tiposDisponibles: _tiposEquipo,
+                                              areas: _areasDisponibles,
+                                              equipoExistente: eq,
+                                            ),
+                                            icon: const Icon(Icons.edit_rounded, size: 16),
+                                            label: const Text('Editar', style: TextStyle(fontSize: 12)),
+                                          ),
                                           if (!vendido && !asignado)
                                             ElevatedButton.icon(
                                               style: ElevatedButton.styleFrom(

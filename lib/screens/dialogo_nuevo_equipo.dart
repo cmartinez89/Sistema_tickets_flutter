@@ -8,28 +8,40 @@ void abrirDialogoNuevoEquipo({
   required VoidCallback onRefresh,
   List<String> tiposDisponibles = const ['Laptop', 'Desktop', 'Servidor', 'Celular', 'Bastón', 'Radio', 'Tablet'],
   List<String> areas = const [],
+  Equipo? equipoExistente,
 }) {
+  final editando = equipoExistente != null;
   final formKey = GlobalKey<FormState>();
-  final marcaCtrl = TextEditingController();
-  final modeloCtrl = TextEditingController();
-  final noSerieCtrl = TextEditingController();
-  final accesoriosCtrl = TextEditingController();
-  final anoCtrl = TextEditingController(text: DateTime.now().year.toString());
-  final valorCtrl = TextEditingController(text: '0');
-  final specsCtrl = TextEditingController();
-  final ubicacionCtrl = TextEditingController(text: 'Beta');
-  final areaCtrl = TextEditingController();
-  String? areaSeleccionada;
-  final macCtrl = TextEditingController();
-  final anydeskCtrl = TextEditingController();
-  final rustdeskCtrl = TextEditingController();
-  final comentariosCtrl = TextEditingController();
+  final marcaCtrl = TextEditingController(text: equipoExistente?.marca);
+  final modeloCtrl = TextEditingController(text: equipoExistente?.modelo);
+  final noSerieCtrl = TextEditingController(text: equipoExistente?.noSerie);
+  final accesoriosCtrl = TextEditingController(text: equipoExistente?.accesorios);
+  final anoCtrl = TextEditingController(text: (equipoExistente?.anoAdquisicion ?? DateTime.now().year).toString());
+  final valorCtrl = TextEditingController(text: (equipoExistente?.valorAdquisicion ?? 0).toString());
+  final specsCtrl = TextEditingController(text: equipoExistente?.specifications);
+  final ubicacionCtrl = TextEditingController(text: equipoExistente?.ubicacion ?? 'Beta');
+  final areaCtrl = TextEditingController(text: equipoExistente?.area);
+  String? areaSeleccionada = equipoExistente?.area;
+  final macCtrl = TextEditingController(text: equipoExistente?.macAddress);
+  final anydeskCtrl = TextEditingController(text: equipoExistente?.anydesk);
+  final rustdeskCtrl = TextEditingController(text: equipoExistente?.rustdesk);
+  final comentariosCtrl = TextEditingController(text: equipoExistente?.comentarios);
 
-  final tiposValidos = tiposDisponibles.isNotEmpty
+  final tiposValidos = List<String>.from(tiposDisponibles.isNotEmpty
       ? tiposDisponibles
-      : ['Laptop', 'Desktop', 'Servidor', 'Celular', 'Bastón', 'Radio', 'Tablet'];
+      : ['Laptop', 'Desktop', 'Servidor', 'Celular', 'Bastón', 'Radio', 'Tablet']);
+  if (equipoExistente != null && !tiposValidos.contains(equipoExistente.tipo)) {
+    tiposValidos.insert(0, equipoExistente.tipo);
+  }
 
-  String tipoSeleccionado = tiposValidos.first;
+  final areasValidas = List<String>.from(areas);
+  if (equipoExistente?.area != null &&
+      equipoExistente!.area!.isNotEmpty &&
+      !areasValidas.contains(equipoExistente.area)) {
+    areasValidas.insert(0, equipoExistente.area!);
+  }
+
+  String tipoSeleccionado = equipoExistente?.tipo ?? tiposValidos.first;
   bool guardando = false;
 
   const _tiposConMac = ['Celular', 'Laptop', 'Desktop', 'Servidor'];
@@ -38,11 +50,12 @@ void abrirDialogoNuevoEquipo({
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setDs) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.computer_rounded, color: Color(0xFF1A2B72)),
-            SizedBox(width: 8),
-            Text('Dar de Alta Equipo Nuevo', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const Icon(Icons.computer_rounded, color: Color(0xFF1A2B72)),
+            const SizedBox(width: 8),
+            Text(editando ? 'Editar Equipo' : 'Dar de Alta Equipo Nuevo',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
         content: SizedBox(
@@ -139,12 +152,12 @@ void abrirDialogoNuevoEquipo({
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: areas.isNotEmpty
+                        child: areasValidas.isNotEmpty
                           ? DropdownButtonFormField<String>(
                               value: areaSeleccionada,
                               decoration: const InputDecoration(labelText: 'Área / Departamento', border: OutlineInputBorder()),
                               hint: const Text('Seleccionar área'),
-                              items: areas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
+                              items: areasValidas.map((a) => DropdownMenuItem(value: a, child: Text(a))).toList(),
                               onChanged: (v) => setDs(() => areaSeleccionada = v),
                             )
                           : TextFormField(
@@ -178,21 +191,23 @@ void abrirDialogoNuevoEquipo({
                     maxLines: 2,
                     decoration: const InputDecoration(labelText: 'Comentarios adicionales', border: OutlineInputBorder()),
                   ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: const Color(0xFFE8EAF6), borderRadius: BorderRadius.circular(8)),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, size: 14, color: Color(0xFF1A2B72)),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text('El folio de activo se generará automáticamente.',
-                              style: TextStyle(fontSize: 11, color: Color(0xFF1A2B72))),
-                        ),
-                      ],
+                  if (!editando) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: const Color(0xFFE8EAF6), borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, size: 14, color: Color(0xFF1A2B72)),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text('El folio de activo se generará automáticamente.',
+                                style: TextStyle(fontSize: 11, color: Color(0xFF1A2B72))),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -208,9 +223,9 @@ void abrirDialogoNuevoEquipo({
                     if (!formKey.currentState!.validate()) return;
                     setDs(() => guardando = true);
 
-                    final nuevoEq = Equipo(
-                      id: '',
-                      folioResponsiva: '---',
+                    final eq = Equipo(
+                      id: equipoExistente?.id ?? '',
+                      folioResponsiva: equipoExistente?.folioResponsiva ?? '---',
                       tipo: tipoSeleccionado,
                       marca: marcaCtrl.text.trim(),
                       modelo: modeloCtrl.text.trim(),
@@ -219,25 +234,31 @@ void abrirDialogoNuevoEquipo({
                       anoAdquisicion: int.tryParse(anoCtrl.text) ?? DateTime.now().year,
                       valorAdquisicion: double.tryParse(valorCtrl.text) ?? 0.0,
                       specifications: specsCtrl.text.trim(),
-                      estatus: 'Disponible',
+                      estatus: equipoExistente?.estatus ?? 'Disponible',
                       ubicacion: ubicacionCtrl.text.trim().isEmpty ? 'Beta' : ubicacionCtrl.text.trim(),
-                      area: areas.isNotEmpty
+                      area: areasValidas.isNotEmpty
                           ? areaSeleccionada
                           : (areaCtrl.text.trim().isEmpty ? null : areaCtrl.text.trim()),
                       macAddress: macCtrl.text.trim().isEmpty ? null : macCtrl.text.trim(),
                       anydesk: anydeskCtrl.text.trim(),
                       rustdesk: rustdeskCtrl.text.trim(),
                       comentarios: comentariosCtrl.text.trim(),
+                      empleadoAsignado: equipoExistente?.empleadoAsignado,
+                      rolEmpleado: equipoExistente?.rolEmpleado,
                     );
 
                     try {
-                      await api.crearEquipo(nuevoEq);
+                      if (editando) {
+                        await api.editarEquipo(eq.id, eq);
+                      } else {
+                        await api.crearEquipo(eq);
+                      }
                       if (ctx.mounted) Navigator.pop(ctx);
                       onRefresh();
                     } catch (e) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error al registrar activo: $e'), backgroundColor: Colors.redAccent),
+                          SnackBar(content: Text('Error al guardar activo: $e'), backgroundColor: Colors.redAccent),
                         );
                       }
                     } finally {
@@ -246,7 +267,7 @@ void abrirDialogoNuevoEquipo({
                   },
             child: guardando
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('Guardar Equipo'),
+                : Text(editando ? 'Guardar Cambios' : 'Guardar Equipo'),
           ),
         ],
       ),

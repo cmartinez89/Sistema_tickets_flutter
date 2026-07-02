@@ -78,6 +78,17 @@ class ApiService {
     return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
   }
 
+  Future<List<Map<String, dynamic>>> fetchComentarios(String ticketId) async {
+    final res = await http.get(Uri.parse('$kApiUrl/tickets/$ticketId/comentarios'), headers: _headers).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception('Error al cargar comentarios');
+    return (jsonDecode(res.body) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<void> agregarComentario(String ticketId, String texto) async {
+    final res = await http.post(Uri.parse('$kApiUrl/tickets/$ticketId/comentarios'), headers: _headers, body: jsonEncode({'texto': texto})).timeout(kTimeout);
+    if (res.statusCode != 200 && res.statusCode != 201) throw Exception(_parseError(res, 'Error al agregar comentario'));
+  }
+
   // ── Equipos ──────────────────────────────────────────────────────────────────
 
   Future<List<Equipo>> fetchEquipos() async {
@@ -92,6 +103,12 @@ class ApiService {
     body.remove('folioActivo');
     final res = await http.post(Uri.parse('$kApiUrl/equipos'), headers: _headers, body: jsonEncode(body)).timeout(kTimeout);
     if (res.statusCode != 200 && res.statusCode != 201) throw Exception('Error al registrar equipo');
+    return Equipo.fromMap(jsonDecode(res.body));
+  }
+
+  Future<Equipo> editarEquipo(String id, Equipo equipo) async {
+    final res = await http.put(Uri.parse('$kApiUrl/equipos/$id'), headers: _headers, body: jsonEncode(equipo.toMap())).timeout(kTimeout);
+    if (res.statusCode != 200) throw Exception(_parseError(res, 'Error al editar equipo'));
     return Equipo.fromMap(jsonDecode(res.body));
   }
 
