@@ -331,11 +331,14 @@ class EquipoVenderRequest(BaseModel):
     precioVenta: float
     fechaVenta: str
 
+CANALES_VALIDOS = {'soporte', 'desarrollo', 'general'}
+
 class MensajeRequest(BaseModel):
     deUsuario: str
     nombreCompleto: str
     texto: str = ''
     imagen: Optional[str] = None
+    canal: str
 
 class UsuarioCreateRequest(BaseModel):
     username: str
@@ -1288,7 +1291,7 @@ def get_mensajes(current_user: dict = Depends(get_current_user)):
             cursor.execute("""
                 SELECT * FROM (
                     SELECT id, de_usuario AS deUsuario, nombre_completo AS nombreCompleto,
-                           texto, imagen, fecha,
+                           texto, imagen, fecha, canal,
                            COALESCE(borrado, 0) AS borrado,
                            borrado_por AS borradoPor
                     FROM mensajes ORDER BY fecha DESC LIMIT 200
@@ -1330,6 +1333,8 @@ async def delete_mensaje(mensaje_id: int, current_user: dict = Depends(get_curre
 
 @app.post("/mensajes")
 async def create_mensaje(req: MensajeRequest, current_user: dict = Depends(get_current_user)):
+    if req.canal not in CANALES_VALIDOS:
+        raise HTTPException(status_code=400, detail="Canal inválido")
     texto = req.texto.strip() if req.texto else ''
     if not texto and not req.imagen:
         raise HTTPException(status_code=400, detail="El mensaje no puede estar vacío")
@@ -1341,8 +1346,8 @@ async def create_mensaje(req: MensajeRequest, current_user: dict = Depends(get_c
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO mensajes (de_usuario, nombre_completo, texto, imagen, fecha) VALUES (%s, %s, %s, %s, %s)",
-                (de_usuario, nombre_completo, texto, req.imagen, ahora)
+                "INSERT INTO mensajes (de_usuario, nombre_completo, texto, imagen, fecha, canal) VALUES (%s, %s, %s, %s, %s, %s)",
+                (de_usuario, nombre_completo, texto, req.imagen, ahora, req.canal)
             )
             connection.commit()
             nuevo_id = cursor.lastrowid
@@ -1356,6 +1361,7 @@ async def create_mensaje(req: MensajeRequest, current_user: dict = Depends(get_c
         "texto": texto,
         "imagen": req.imagen,
         "fecha": ahora.isoformat(),
+        "canal": req.canal,
     }
     await manager.broadcast(payload)
     return payload
