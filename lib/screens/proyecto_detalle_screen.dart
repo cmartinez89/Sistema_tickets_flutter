@@ -34,7 +34,7 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
   bool _cargando = true;
 
   bool get _puedeEditar =>
-      widget.session.rol == 'Admin' || widget.session.rol == 'Enc. Desarrollo';
+      widget.session.rol == 'Admin' || widget.session.rol == 'Desarrollador Sr.';
 
   @override
   void initState() {
@@ -139,6 +139,18 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
     widget.onProyectoActualizado();
   }
 
+  void _verTarea(Tarea t) {
+    showDialog(
+      context: context,
+      builder: (_) => _DialogoVerTarea(
+        tarea: t,
+        puedeEditar: _puedeEditar,
+        onEditar: () => _abrirDialogoTarea(t),
+        onEliminar: () => _eliminarTarea(t),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,9 +191,9 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
                 _KanbanView(
                   tareas: _tareas,
                   session: widget.session,
+                  puedeEditar: _puedeEditar,
                   onCambiarEstado: _cambiarEstado,
-                  onEditar: _puedeEditar ? _abrirDialogoTarea : null,
-                  onEliminar: _puedeEditar ? _eliminarTarea : null,
+                  onVerDetalle: _verTarea,
                 ),
                 _GanttView(
                   proyecto: widget.proyecto,
@@ -214,16 +226,16 @@ const _kEstadoColor = {
 class _KanbanView extends StatelessWidget {
   final List<Tarea> tareas;
   final Session session;
+  final bool puedeEditar;
   final void Function(Tarea, String) onCambiarEstado;
-  final void Function(Tarea)? onEditar;
-  final void Function(Tarea)? onEliminar;
+  final void Function(Tarea) onVerDetalle;
 
   const _KanbanView({
     required this.tareas,
     required this.session,
+    required this.puedeEditar,
     required this.onCambiarEstado,
-    this.onEditar,
-    this.onEliminar,
+    required this.onVerDetalle,
   });
 
   @override
@@ -237,9 +249,10 @@ class _KanbanView extends StatelessWidget {
             .map((estado) => _KanbanColumna(
                   estado: estado,
                   tareas: tareas.where((t) => t.estado == estado).toList(),
+                  session: session,
+                  puedeEditar: puedeEditar,
                   onDrop: (t) => onCambiarEstado(t, estado),
-                  onEditar: onEditar,
-                  onEliminar: onEliminar,
+                  onVerDetalle: onVerDetalle,
                 ))
             .toList(),
       ),
@@ -250,16 +263,18 @@ class _KanbanView extends StatelessWidget {
 class _KanbanColumna extends StatefulWidget {
   final String estado;
   final List<Tarea> tareas;
+  final Session session;
+  final bool puedeEditar;
   final void Function(Tarea) onDrop;
-  final void Function(Tarea)? onEditar;
-  final void Function(Tarea)? onEliminar;
+  final void Function(Tarea) onVerDetalle;
 
   const _KanbanColumna({
     required this.estado,
     required this.tareas,
+    required this.session,
+    required this.puedeEditar,
     required this.onDrop,
-    this.onEditar,
-    this.onEliminar,
+    required this.onVerDetalle,
   });
 
   @override
@@ -337,8 +352,9 @@ class _KanbanColumnaState extends State<_KanbanColumna> {
                         itemCount: widget.tareas.length,
                         itemBuilder: (_, i) => _TareaCard(
                           tarea: widget.tareas[i],
-                          onEditar: widget.onEditar,
-                          onEliminar: widget.onEliminar,
+                          session: widget.session,
+                          puedeEditar: widget.puedeEditar,
+                          onVerDetalle: () => widget.onVerDetalle(widget.tareas[i]),
                         ),
                       ),
               ),
@@ -350,12 +366,37 @@ class _KanbanColumnaState extends State<_KanbanColumna> {
   }
 }
 
+/// true si el usuario puede arrastrar/mover esta tarea en el Kanban:
+/// Admin y Desarrollador Sr. mueven cualquiera; un Desarrollador solo la suya.
+bool puedeMoverTarea({
+  required String rol,
+  required String? asignadoAUsername,
+  required String username,
+}) =>
+    rol == 'Admin' || rol == 'Desarrollador Sr.' || asignadoAUsername == username;
+
+const List<double> _kMatrizGrises = [
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0, 0, 0, 1, 0,
+];
+
 class _TareaCard extends StatelessWidget {
   final Tarea tarea;
-  final void Function(Tarea)? onEditar;
-  final void Function(Tarea)? onEliminar;
+  final Session session;
+  final bool puedeEditar;
+  final VoidCallback onVerDetalle;
 
-  const _TareaCard({required this.tarea, this.onEditar, this.onEliminar});
+  const _TareaCard({
+    required this.tarea,
+    required this.session,
+    required this.puedeEditar,
+    required this.onVerDetalle,
+  });
+
+  bool get _puedeMover => puedeEditar ||
+      puedeMoverTarea(rol: session.rol, asignadoAUsername: tarea.asignadoAUsername, username: session.username);
 
   Color get _prioColor => switch (tarea.prioridad) {
         'alta' => Colors.red[400]!,
@@ -365,12 +406,11 @@ class _TareaCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final body = _CardBody(
-      tarea: tarea,
-      prioColor: _prioColor,
-      onEditar: onEditar != null ? () => onEditar!(tarea) : null,
-      onEliminar: onEliminar != null ? () => onEliminar!(tarea) : null,
+    final body = GestureDetector(
+      onTap: onVerDetalle,
+      child: _CardBody(tarea: tarea, prioColor: _prioColor, atenuada: !_puedeMover),
     );
+    if (!_puedeMover) return body;
     return Draggable<Tarea>(
       data: tarea,
       feedback: Material(
@@ -387,14 +427,16 @@ class _TareaCard extends StatelessWidget {
 class _CardBody extends StatelessWidget {
   final Tarea tarea;
   final Color prioColor;
-  final VoidCallback? onEditar;
-  final VoidCallback? onEliminar;
+  final bool atenuada;
 
-  const _CardBody({required this.tarea, required this.prioColor, this.onEditar, this.onEliminar});
+  const _CardBody({required this.tarea, required this.prioColor, this.atenuada = false});
+
+  String _fmt(DateTime? d) =>
+      d == null ? '—' : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final card = Card(
       margin: const EdgeInsets.only(bottom: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 1,
@@ -413,14 +455,6 @@ class _CardBody extends StatelessWidget {
                   child: Text(tarea.titulo,
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 ),
-                if (onEditar != null)
-                  InkWell(onTap: onEditar,
-                      child: const Icon(Icons.edit_outlined, size: 14, color: Colors.grey)),
-                if (onEliminar != null) ...[
-                  const SizedBox(width: 4),
-                  InkWell(onTap: onEliminar,
-                      child: const Icon(Icons.delete_outline, size: 14, color: Colors.redAccent)),
-                ],
               ],
             ),
             if (tarea.descripcion.isNotEmpty) ...[
@@ -453,9 +487,99 @@ class _CardBody extends StatelessWidget {
                 ),
               ],
             ),
+            if (tarea.fechaInicio != null || tarea.fechaFin != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today_outlined, size: 11, color: Colors.grey[400]),
+                  const SizedBox(width: 4),
+                  Text('${_fmt(tarea.fechaInicio)} → ${_fmt(tarea.fechaFin)}',
+                      style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                ],
+              ),
+            ],
           ],
         ),
       ),
+    );
+    if (!atenuada) return card;
+    return Opacity(
+      opacity: 0.55,
+      child: ColorFiltered(
+        colorFilter: const ColorFilter.matrix(_kMatrizGrises),
+        child: card,
+      ),
+    );
+  }
+}
+
+class _DialogoVerTarea extends StatelessWidget {
+  final Tarea tarea;
+  final bool puedeEditar;
+  final VoidCallback onEditar;
+  final VoidCallback onEliminar;
+
+  const _DialogoVerTarea({
+    required this.tarea,
+    required this.puedeEditar,
+    required this.onEditar,
+    required this.onEliminar,
+  });
+
+  String _fmt(DateTime? d) => d == null
+      ? 'Sin fecha'
+      : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Widget _fila(String label, String valor) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 100,
+              child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+            ),
+            Expanded(child: Text(valor, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(tarea.titulo),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (tarea.descripcion.isNotEmpty) ...[
+              Text(tarea.descripcion, style: TextStyle(color: Colors.grey[700])),
+              const SizedBox(height: 14),
+            ],
+            _fila('Estado', _kEstadoLabel[tarea.estado] ?? tarea.estado),
+            _fila('Prioridad', tarea.prioridad),
+            _fila('Asignado a', tarea.asignadoANombre ?? 'Sin asignar'),
+            _fila('Fecha inicio', _fmt(tarea.fechaInicio)),
+            _fila('Fecha fin', _fmt(tarea.fechaFin)),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar')),
+        if (puedeEditar) ...[
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+            onPressed: () { Navigator.pop(context); onEliminar(); },
+            child: const Text('Eliminar'),
+          ),
+          FilledButton(
+            onPressed: () { Navigator.pop(context); onEditar(); },
+            child: const Text('Editar'),
+          ),
+        ],
+      ],
     );
   }
 }
