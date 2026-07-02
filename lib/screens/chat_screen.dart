@@ -124,6 +124,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _inputCtrl.addListener(_detectarMencion);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
+      }
+    });
   }
 
   @override
