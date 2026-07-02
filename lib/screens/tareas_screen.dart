@@ -3,6 +3,7 @@ import '../models/tarea_model.dart';
 import '../models/proyecto_model.dart';
 import '../models/session_model.dart';
 import '../services/api_service.dart';
+import 'proyecto_detalle_screen.dart' show puedeMoverTarea;
 
 class TareasScreen extends StatefulWidget {
   final ApiService api;
@@ -189,6 +190,7 @@ class _TareasScreenState extends State<TareasScreen> {
                         tarea: lista[i],
                         estadoColor: _estadoColor,
                         estadoLabel: _estadoLabel,
+                        puedeMover: _puedeMover(lista[i]),
                         onEstadoChanged: (e) => _cambiarEstado(lista[i], e),
                       ),
                     ),
@@ -198,6 +200,12 @@ class _TareasScreenState extends State<TareasScreen> {
       ),
     );
   }
+
+  bool _puedeMover(Tarea t) => puedeMoverTarea(
+        rol: widget.session.rol,
+        asignadoAUsername: t.asignadoAUsername,
+        username: widget.session.username,
+      );
 
   Future<void> _cambiarEstado(Tarea tarea, String nuevoEstado) async {
     final antes = List<Tarea>.from(_tareas);
@@ -309,12 +317,14 @@ class _TareaFila extends StatelessWidget {
   final Tarea tarea;
   final Map<String, Color> estadoColor;
   final Map<String, String> estadoLabel;
+  final bool puedeMover;
   final void Function(String) onEstadoChanged;
 
   const _TareaFila({
     required this.tarea,
     required this.estadoColor,
     required this.estadoLabel,
+    required this.puedeMover,
     required this.onEstadoChanged,
   });
 
@@ -385,21 +395,27 @@ class _TareaFila extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                PopupMenuButton<String>(
-                  child: Chip(
-                    label: Text(estadoLabel[tarea.estado] ?? tarea.estado,
-                        style:
-                            const TextStyle(fontSize: 11, color: Colors.white)),
-                    backgroundColor: eColor,
-                    padding: EdgeInsets.zero,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  itemBuilder: (_) => estadoLabel.entries
-                      .map((e) =>
-                          PopupMenuItem(value: e.key, child: Text(e.value)))
-                      .toList(),
-                  onSelected: onEstadoChanged,
-                ),
+                puedeMover
+                    ? PopupMenuButton<String>(
+                        child: Chip(
+                          label: Text(estadoLabel[tarea.estado] ?? tarea.estado,
+                              style: const TextStyle(fontSize: 11, color: Colors.white)),
+                          backgroundColor: eColor,
+                          padding: EdgeInsets.zero,
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        itemBuilder: (_) => estadoLabel.entries
+                            .map((e) => PopupMenuItem(value: e.key, child: Text(e.value)))
+                            .toList(),
+                        onSelected: onEstadoChanged,
+                      )
+                    : Chip(
+                        label: Text(estadoLabel[tarea.estado] ?? tarea.estado,
+                            style: const TextStyle(fontSize: 11, color: Colors.white)),
+                        backgroundColor: eColor,
+                        padding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
                 const SizedBox(height: 4),
                 Text(
                   '${_fmt(tarea.fechaInicio)} → ${_fmt(tarea.fechaFin)}',

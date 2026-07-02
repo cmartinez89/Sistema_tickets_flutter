@@ -1528,6 +1528,17 @@ class _DialogoTareaState extends State<_DialogoTarea> {
     setState(() { if (isInicio) _fechaInicio = p; else _fechaFin = p; });
   }
 
+  List<Usuario> get _asignables {
+    final devs = widget.usuarios
+        .where((u) => u.rol == 'Desarrollador' || u.rol == 'Desarrollador Sr.')
+        .toList();
+    if (_asignadoA != null && !devs.any((u) => u.username == _asignadoA)) {
+      final actual = widget.usuarios.where((u) => u.username == _asignadoA);
+      if (actual.isNotEmpty) devs.add(actual.first);
+    }
+    return devs;
+  }
+
   void _guardar() {
     if (!_formKey.currentState!.validate()) return;
     Navigator.pop(context, {
@@ -1598,7 +1609,7 @@ class _DialogoTareaState extends State<_DialogoTarea> {
                   decoration: const InputDecoration(labelText: 'Asignar a'),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('Sin asignar')),
-                    ...widget.usuarios.map((u) =>
+                    ..._asignables.map((u) =>
                         DropdownMenuItem(value: u.username, child: Text(u.nombreCompleto))),
                   ],
                   onChanged: (v) => setState(() => _asignadoA = v),
