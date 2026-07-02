@@ -33,8 +33,24 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
   List<Tarea> _tareas = [];
   bool _cargando = true;
 
+  final _busquedaCtrl = TextEditingController();
+  String _busqueda = '';
+  String? _asignadoFiltro;
+  String? _prioridadFiltro;
+
   bool get _puedeEditar =>
       widget.session.rol == 'Admin' || widget.session.rol == 'Desarrollador Sr.';
+
+  List<Tarea> get _tareasFiltradas => _tareas.where((t) {
+        if (_busqueda.isNotEmpty &&
+            !t.titulo.toLowerCase().contains(_busqueda) &&
+            !t.descripcion.toLowerCase().contains(_busqueda)) {
+          return false;
+        }
+        if (_asignadoFiltro != null && t.asignadoAUsername != _asignadoFiltro) return false;
+        if (_prioridadFiltro != null && t.prioridad != _prioridadFiltro) return false;
+        return true;
+      }).toList();
 
   @override
   void initState() {
@@ -46,6 +62,7 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _busquedaCtrl.dispose();
     super.dispose();
   }
 
@@ -188,12 +205,27 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
           : TabBarView(
               controller: _tabController,
               children: [
-                _KanbanView(
-                  tareas: _tareas,
-                  session: widget.session,
-                  puedeEditar: _puedeEditar,
-                  onCambiarEstado: _cambiarEstado,
-                  onVerDetalle: _verTarea,
+                Column(
+                  children: [
+                    _FiltrosKanban(
+                      tareas: _tareas,
+                      busquedaCtrl: _busquedaCtrl,
+                      onBusqueda: (v) => setState(() => _busqueda = v.toLowerCase()),
+                      asignadoFiltro: _asignadoFiltro,
+                      onAsignadoChanged: (v) => setState(() => _asignadoFiltro = v),
+                      prioridadFiltro: _prioridadFiltro,
+                      onPrioridadChanged: (v) => setState(() => _prioridadFiltro = v),
+                    ),
+                    Expanded(
+                      child: _KanbanView(
+                        tareas: _tareasFiltradas,
+                        session: widget.session,
+                        puedeEditar: _puedeEditar,
+                        onCambiarEstado: _cambiarEstado,
+                        onVerDetalle: _verTarea,
+                      ),
+                    ),
+                  ],
                 ),
                 _GanttView(
                   proyecto: widget.proyecto,
@@ -222,6 +254,152 @@ const _kEstadoColor = {
   'en_revision': Color(0xFFE65100),
   'hecho': Color(0xFF2E7D32),
 };
+
+class _FiltrosKanban extends StatelessWidget {
+  final List<Tarea> tareas;
+  final TextEditingController busquedaCtrl;
+  final ValueChanged<String> onBusqueda;
+  final String? asignadoFiltro;
+  final ValueChanged<String?> onAsignadoChanged;
+  final String? prioridadFiltro;
+  final ValueChanged<String?> onPrioridadChanged;
+
+  const _FiltrosKanban({
+    required this.tareas,
+    required this.busquedaCtrl,
+    required this.onBusqueda,
+    required this.asignadoFiltro,
+    required this.onAsignadoChanged,
+    required this.prioridadFiltro,
+    required this.onPrioridadChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final asignados = <String, String>{};
+    for (final t in tareas) {
+      if (t.asignadoAUsername != null && t.asignadoANombre != null) {
+        asignados[t.asignadoAUsername!] = t.asignadoANombre!;
+      }
+    }
+    final hayFiltros = asignadoFiltro != null || prioridadFiltro != null || busquedaCtrl.text.isNotEmpty;
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 220,
+              child: TextField(
+                controller: busquedaCtrl,
+                onChanged: onBusqueda,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: 'Buscar tarea...',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(20)),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            _FiltroChipTarea(
+              label: asignadoFiltro == null ? 'Asignado a' : (asignados[asignadoFiltro] ?? asignadoFiltro!),
+              activo: asignadoFiltro != null,
+              onTap: () async {
+                final v = await showDialog<String?>(
+                  context: context,
+                  builder: (_) => SimpleDialog(
+                    title: const Text('Filtrar por asignado'),
+                    children: [
+                      SimpleDialogOption(onPressed: () => Navigator.pop(context, null), child: const Text('Todos')),
+                      ...asignados.entries.map((e) =>
+                          SimpleDialogOption(onPressed: () => Navigator.pop(context, e.key), child: Text(e.value))),
+                    ],
+                  ),
+                );
+                onAsignadoChanged(v);
+              },
+            ),
+            const SizedBox(width: 8),
+            _FiltroChipTarea(
+              label: prioridadFiltro ?? 'Prioridad',
+              activo: prioridadFiltro != null,
+              onTap: () async {
+                final v = await showDialog<String?>(
+                  context: context,
+                  builder: (_) => SimpleDialog(
+                    title: const Text('Filtrar por prioridad'),
+                    children: [
+                      SimpleDialogOption(onPressed: () => Navigator.pop(context, null), child: const Text('Todas')),
+                      SimpleDialogOption(onPressed: () => Navigator.pop(context, 'alta'), child: const Text('Alta')),
+                      SimpleDialogOption(onPressed: () => Navigator.pop(context, 'media'), child: const Text('Media')),
+                      SimpleDialogOption(onPressed: () => Navigator.pop(context, 'baja'), child: const Text('Baja')),
+                    ],
+                  ),
+                );
+                onPrioridadChanged(v);
+              },
+            ),
+            if (hayFiltros) ...[
+              const SizedBox(width: 8),
+              TextButton.icon(
+                onPressed: () {
+                  busquedaCtrl.clear();
+                  onBusqueda('');
+                  onAsignadoChanged(null);
+                  onPrioridadChanged(null);
+                },
+                icon: const Icon(Icons.clear, size: 14),
+                label: const Text('Limpiar'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FiltroChipTarea extends StatelessWidget {
+  final String label;
+  final bool activo;
+  final VoidCallback onTap;
+
+  const _FiltroChipTarea({required this.label, required this.activo, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: activo ? const Color(0xFF1A2B72) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: activo ? const Color(0xFF1A2B72) : Colors.grey[300]!),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: activo ? Colors.white : Colors.grey[700],
+                    fontWeight: activo ? FontWeight.bold : FontWeight.normal)),
+            const SizedBox(width: 4),
+            Icon(Icons.arrow_drop_down, size: 16, color: activo ? Colors.white : Colors.grey[600]),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _KanbanView extends StatelessWidget {
   final List<Tarea> tareas;
