@@ -32,6 +32,12 @@ const _kMeses = [
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
 ];
 
+const _kCanalLabel = {
+  'soporte': 'Soporte',
+  'desarrollo': 'Desarrollo',
+  'general': 'General',
+};
+
 bool _mismoDia(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 String _etiquetaFecha(DateTime fecha) {
@@ -93,6 +99,7 @@ Uint8List? _decodeImage(String? dataUrl) {
 
 class ChatScreen extends StatefulWidget {
   final List<ChatMessage> mensajes;
+  final List<String> canales;
   final Session session;
   final ApiService api;
   final List<Usuario> usuarios;
@@ -102,6 +109,7 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     required this.mensajes,
+    required this.canales,
     required this.session,
     required this.api,
     required this.usuarios,
@@ -119,10 +127,15 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _enviando = false;
   String? _imagenSeleccionada;
   List<Usuario> _sugerencias = [];
+  late String _canalActivo;
+
+  List<ChatMessage> get _mensajesDelCanal =>
+      widget.mensajes.where((m) => m.canal == _canalActivo).toList();
 
   @override
   void initState() {
     super.initState();
+    _canalActivo = widget.canales.first;
     _inputCtrl.addListener(_detectarMencion);
   }
 
@@ -193,6 +206,7 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.session.username,
         widget.session.nombreCompleto,
         texto,
+        canal: _canalActivo,
         imagen: imagenEnviar,
       );
     } catch (e) {
@@ -246,6 +260,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
     final esAdmin = widget.session.rol == 'Admin';
+    final mensajes = _mensajesDelCanal;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
@@ -275,17 +290,44 @@ class _ChatScreenState extends State<ChatScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Chat Interno TI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text('Equipo de soporte', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                    Text(_kCanalLabel[_canalActivo] ?? _canalActivo,
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
                   ],
                 ),
               ],
             ),
           ),
+          if (widget.canales.length > 1)
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: widget.canales.map((c) {
+                  final activo = c == _canalActivo;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      label: Text(_kCanalLabel[c] ?? c),
+                      selected: activo,
+                      onSelected: (_) => setState(() => _canalActivo = c),
+                      selectedColor: primary,
+                      backgroundColor: Colors.grey.shade100,
+                      labelStyle: TextStyle(
+                        color: activo ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
           const Divider(height: 1),
 
           // Messages
           Expanded(
-            child: widget.mensajes.isEmpty
+            child: mensajes.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -300,14 +342,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     controller: _scrollCtrl,
                     reverse: true,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    itemCount: widget.mensajes.length,
+                    itemCount: mensajes.length,
                     itemBuilder: (_, reversedI) {
-                      final i = widget.mensajes.length - 1 - reversedI;
-                      final msg = widget.mensajes[i];
+                      final i = mensajes.length - 1 - reversedI;
+                      final msg = mensajes[i];
                       final esMio = msg.deUsuario == widget.session.username;
-                      final nuevoDia = i == 0 || !_mismoDia(widget.mensajes[i - 1].fecha, msg.fecha);
+                      final nuevoDia = i == 0 || !_mismoDia(mensajes[i - 1].fecha, msg.fecha);
                       final mostrarNombre = !esMio &&
-                          (nuevoDia || widget.mensajes[i - 1].deUsuario != msg.deUsuario);
+                          (nuevoDia || mensajes[i - 1].deUsuario != msg.deUsuario);
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
