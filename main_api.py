@@ -1286,11 +1286,13 @@ def get_mensajes(current_user: dict = Depends(get_current_user)):
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT id, de_usuario AS deUsuario, nombre_completo AS nombreCompleto,
-                       texto, imagen, fecha,
-                       COALESCE(borrado, 0) AS borrado,
-                       borrado_por AS borradoPor
-                FROM mensajes ORDER BY fecha ASC LIMIT 200
+                SELECT * FROM (
+                    SELECT id, de_usuario AS deUsuario, nombre_completo AS nombreCompleto,
+                           texto, imagen, fecha,
+                           COALESCE(borrado, 0) AS borrado,
+                           borrado_por AS borradoPor
+                    FROM mensajes ORDER BY fecha DESC LIMIT 200
+                ) sub ORDER BY fecha ASC
             """)
             mensajes = cursor.fetchall()
             for m in mensajes:
