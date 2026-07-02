@@ -46,6 +46,23 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   late final ApiService _api;
   late final WebSocketService _ws;
 
+  bool get _tieneSoporte =>
+      widget.session.rol != 'Desarrollador Sr.' && widget.session.rol != 'Desarrollador';
+  bool get _tieneDesarrollo =>
+      widget.session.rol == 'Admin' ||
+      widget.session.rol == 'Desarrollador Sr.' ||
+      widget.session.rol == 'Desarrollador';
+  bool get _esAdmin => widget.session.rol == 'Admin';
+  int get _chatIndex => (_tieneSoporte ? 4 : 0) + (_tieneDesarrollo ? 2 : 0);
+
+  List<String> get _canalesChat {
+    if (widget.session.rol == 'Admin') return ['soporte', 'desarrollo', 'general'];
+    if (widget.session.rol == 'Desarrollador' || widget.session.rol == 'Desarrollador Sr.') {
+      return ['desarrollo', 'general'];
+    }
+    return ['soporte', 'general'];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -131,11 +148,12 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     if (tipo == 'chat') {
       final msg = ChatMessage.fromMap(datos);
       if (_mensajes.any((m) => m.id == msg.id)) return;
+      final esVisible = _canalesChat.contains(msg.canal);
       setState(() {
         _mensajes = [..._mensajes, msg];
-        if (_screenIndex != 4) _mensajesNoLeidos++;
+        if (esVisible && _screenIndex != _chatIndex) _mensajesNoLeidos++;
       });
-      if (_screenIndex != 4) {
+      if (esVisible && _screenIndex != _chatIndex) {
         NotificationService.lanzarAlertaLocal(
           'Mensaje de ${msg.nombreCompleto}',
           msg.texto.isNotEmpty ? msg.texto : '📷 Imagen',
@@ -230,38 +248,32 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final bool tieneSoporte = widget.session.rol != 'Solo Desarrollo';
-    final bool tieneDesarrollo = widget.session.rol == 'Admin' ||
-        widget.session.rol == 'Enc. Desarrollo' ||
-        widget.session.rol == 'Desarrollador' ||
-        widget.session.rol == 'Solo Desarrollo';
-    final bool esAdmin = widget.session.rol == 'Admin';
-
     final screens = [
-      if (tieneSoporte) ...[
+      if (_tieneSoporte) ...[
         DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session, onNavigate: (i) => setState(() => _screenIndex = i)),
         TicketsScreen(tickets: _tickets, usuarios: _usuarios, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
         EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
         PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
-        ChatScreen(
-          mensajes: _mensajes,
-          session: widget.session,
-          api: _api,
-          usuarios: _usuarios,
-          onVolver: () => setState(() => _screenIndex = _screenAnterior),
-          onBorrarMensaje: (id) async {
-            await _api.borrarMensaje(id);
-            setState(() {
-              _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: widget.session.username) : m).toList();
-            });
-          },
-        ),
       ],
-      if (tieneDesarrollo) ...[
+      if (_tieneDesarrollo) ...[
         ProyectosScreen(api: _api, session: widget.session),
         TareasScreen(api: _api, session: widget.session),
       ],
-      if (esAdmin) ...[
+      ChatScreen(
+        mensajes: _mensajes,
+        canales: _canalesChat,
+        session: widget.session,
+        api: _api,
+        usuarios: _usuarios,
+        onVolver: () => setState(() => _screenIndex = _screenAnterior),
+        onBorrarMensaje: (id) async {
+          await _api.borrarMensaje(id);
+          setState(() {
+            _mensajes = _mensajes.map((m) => m.id == id ? m.copyWith(borrado: true, borradoPor: widget.session.username) : m).toList();
+          });
+        },
+      ),
+      if (_esAdmin) ...[
         UsersScreen(usuarios: _usuarios, api: _api, onRefresh: _cargarUsuarios),
         AdminScreen(api: _api),
         ReportesScreen(api: _api),
@@ -270,9 +282,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     ];
 
     return Scaffold(
-      floatingActionButton: tieneSoporte && _screenIndex != 4
-          ? _buildFabChat()
-          : null,
+      floatingActionButton: _screenIndex != _chatIndex ? _buildFabChat() : null,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
         title: Text(
@@ -292,15 +302,9 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         ],
       ),
       drawer: Builder(builder: (ctx) {
-        final bool tieneSoporte = widget.session.rol != 'Solo Desarrollo';
-        final bool tieneDesarrollo = widget.session.rol == 'Admin' ||
-            widget.session.rol == 'Enc. Desarrollo' ||
-            widget.session.rol == 'Desarrollador' ||
-            widget.session.rol == 'Solo Desarrollo';
-        final bool esAdmin = widget.session.rol == 'Admin';
-        final int soporteCount = tieneSoporte ? 5 : 0;
-        final int devOffset = tieneDesarrollo ? soporteCount : -1;
-        final int adminOffset = soporteCount + (tieneDesarrollo ? 2 : 0);
+        final int soporteCount = _tieneSoporte ? 4 : 0;
+        final int devOffset = _tieneDesarrollo ? soporteCount : -1;
+        final int adminOffset = _chatIndex + 1;
 
         return Drawer(
           child: ListView(
@@ -316,29 +320,31 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                     const SizedBox(height: 8),
                     Text(widget.session.nombreCompleto,
                         style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('${widget.session.rol}',
+                    Text(widget.session.rol,
                         style: const TextStyle(color: Colors.white70, fontSize: 13)),
                   ],
                 ),
               ),
               // ── Soporte Técnico ──────────────────────────────────────
-              if (tieneSoporte) ...[
+              if (_tieneSoporte) ...[
                 _sectionHeader('Soporte Técnico'),
                 _item(Icons.dashboard_rounded, 'Dashboard', 0),
                 _item(Icons.confirmation_number_rounded, 'Tickets / Asignaciones', 1),
                 _item(Icons.computer_rounded, 'Equipos / Responsivas', 2),
                 _item(Icons.backup_rounded, 'Control de Respaldos', 3),
-                _itemChat(),
               ],
               // ── Desarrollo ───────────────────────────────────────────
-              if (tieneDesarrollo) ...[
+              if (_tieneDesarrollo) ...[
                 const Divider(indent: 16, endIndent: 16),
                 _sectionHeader('Desarrollo'),
                 _item(Icons.folder_special_rounded, 'Proyectos', devOffset),
                 _item(Icons.task_alt_rounded, 'Tareas', devOffset + 1),
               ],
+              // ── Chat ───────────────────────────────────────────────
+              const Divider(indent: 16, endIndent: 16),
+              _itemChat(),
               // ── Administración ───────────────────────────────────────
-              if (esAdmin) ...[
+              if (_esAdmin) ...[
                 const Divider(indent: 16, endIndent: 16),
                 _sectionHeader('Administración'),
                 _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', adminOffset),
@@ -367,7 +373,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           onPressed: () {
             setState(() {
               _screenAnterior = _screenIndex;
-              _screenIndex = 4;
+              _screenIndex = _chatIndex;
               _mensajesNoLeidos = 0;
             });
           },
@@ -435,11 +441,11 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           ],
         ),
         title: const Text('Chat Interno'),
-        selected: _screenIndex == 4,
+        selected: _screenIndex == _chatIndex,
         onTap: () {
           setState(() {
             _screenAnterior = _screenIndex;
-            _screenIndex = 4;
+            _screenIndex = _chatIndex;
             _mensajesNoLeidos = 0;
           });
           Navigator.pop(context);
