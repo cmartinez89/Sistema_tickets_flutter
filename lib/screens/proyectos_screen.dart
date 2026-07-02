@@ -22,7 +22,7 @@ class _ProyectosScreenState extends State<ProyectosScreen> {
   String? _error;
 
   bool get _puedeEditar =>
-      widget.session.rol == 'Admin' || widget.session.rol == 'Enc. Desarrollo';
+      widget.session.rol == 'Admin' || widget.session.rol == 'Desarrollador Sr.';
 
   @override
   void initState() {
