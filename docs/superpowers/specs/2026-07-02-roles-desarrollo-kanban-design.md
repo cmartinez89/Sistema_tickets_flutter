@@ -75,16 +75,45 @@ Se crean directamente en la base de datos de producción (mismo hash bcrypt que 
 | Elizabeth Rodríguez | `llira` | `123456` | Desarrollador | llira@beta.com.mx |
 | Angel Medina | `amedina` | `123456` | Desarrollador | amedina@beta.com.mx |
 
+## 7. Tres canales de chat (Soporte / Desarrollo / General)
+
+Hoy hay un solo chat interno global. Se necesita separar por audiencia sin perder el historial actual.
+
+**Modelo de datos:** se agrega la columna `canal VARCHAR(20) NOT NULL DEFAULT 'soporte'` a la tabla `mensajes`. Los mensajes existentes quedan como `soporte` (es el chat que ya existía). Se valida en el backend que `canal` sea uno de `soporte` | `desarrollo` | `general` (rechazar con 400 si no).
+
+**Acceso por rol:**
+
+| Rol | Canales visibles |
+|---|---|
+| Admin | Soporte, Desarrollo, General |
+| Técnico, Técnico Sr. | Soporte, General |
+| Desarrollador, Desarrollador Sr. | Desarrollo, General |
+
+El chat deja de depender de `tieneSoporte`: pasa a ser un acceso independiente que **todo** usuario tiene (con el subconjunto de canales de su rol), incluyendo el botón flotante de acceso rápido. Esto implica recalcular los índices de navegación en `main_layout.dart` (hoy el chat vive dentro del bloque de Soporte en una posición fija).
+
+**Backend:**
+- `GET /mensajes` devuelve todos los mensajes (con su `canal`) sin filtrar por query param — el volumen actual (~28 mensajes históricos) no justifica paginar por canal todavía; el cliente separa por canal en memoria.
+- `POST /mensajes` requiere `canal` en el body, lo valida y lo guarda; el payload de broadcast por WebSocket incluye `canal` para que cada cliente decida si le corresponde.
+- `DELETE /mensajes/{id}` no cambia.
+
+**Frontend:**
+- `ChatMessage` agrega el campo `canal`.
+- `ChatScreen` recibe la lista de canales disponibles para la sesión; si hay más de uno, muestra pestañas arriba para cambiar de canal (orden: canal principal del rol primero, General al final). Enviar un mensaje usa el canal activo.
+- El badge de no leídos sigue siendo un solo contador agregado (no por canal) — no se pide desglose por canal en esta iteración.
+- Las notificaciones de mensaje nuevo solo se disparan si el canal del mensaje entrante es uno de los canales visibles para el usuario.
+
 ## Fuera de alcance
 
-- No se agrega enforcement de permisos en el backend (consistente con el resto del sistema).
+- No se agrega enforcement de permisos en el backend para Kanban/proyectos (consistente con el resto del sistema).
 - No se modifica el Gantt más allá de que ya respeta `_puedeEditar` (los desarrolladores no arrastran fechas ahí, solo ven).
 - No se toca el flujo de creación de proyectos más allá de gatear `_puedeEditar` con el nuevo nombre de rol.
+- No hay badge de no leídos por canal, ni límite de mensajes por canal — se revisará si el volumen de mensajes crece mucho.
 
 ## Plan de entrega
 
-1. Implementar cambios de Flutter (roles, Kanban, filtros, diálogo de detalle).
-2. `flutter analyze` limpio.
-3. Levantar el build localmente (`flutter run -d chrome`) para que el usuario pruebe antes de subir nada.
-4. Solo tras aprobación explícita: commit + push a GitHub y `deploy.ps1` a producción.
-5. Alta de los 4 usuarios en la base de datos de producción.
+1. Implementar cambios de backend (migración `canal`, validación, broadcast).
+2. Implementar cambios de Flutter (roles, Kanban, filtros, diálogo de detalle, chats por canal).
+3. `flutter analyze` limpio.
+4. Levantar el build localmente (`flutter run -d chrome`) para que el usuario pruebe antes de subir nada.
+5. Solo tras aprobación explícita: commit + push a GitHub, migración en la base de producción y `deploy.ps1`.
+6. Alta de los 4 usuarios en la base de datos de producción.
