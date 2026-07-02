@@ -17,6 +17,7 @@ class ChatMessage {
   final String? imagen;
   final bool borrado;
   final String? borradoPor;
+  final String canal;
 
   ChatMessage({
     required this.id,
@@ -27,6 +28,7 @@ class ChatMessage {
     this.imagen,
     this.borrado = false,
     this.borradoPor,
+    this.canal = 'soporte',
   });
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) => ChatMessage(
@@ -38,6 +40,7 @@ class ChatMessage {
     imagen: map['imagen'],
     borrado: map['borrado'] == true || map['borrado'] == 1,
     borradoPor: map['borradoPor'],
+    canal: map['canal'] ?? 'soporte',
   );
 
   ChatMessage copyWith({bool? borrado, String? borradoPor}) => ChatMessage(
@@ -49,5 +52,6 @@ class ChatMessage {
     imagen: imagen,
     borrado: borrado ?? this.borrado,
     borradoPor: borradoPor ?? this.borradoPor,
+    canal: canal,
   );
 }

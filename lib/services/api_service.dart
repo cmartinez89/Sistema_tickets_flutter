@@ -214,8 +214,8 @@ class ApiService {
     return (jsonDecode(res.body) as List).map((e) => ChatMessage.fromMap(e)).toList();
   }
 
-  Future<void> enviarMensaje(String deUsuario, String nombreCompleto, String texto, {String? imagen}) async {
-    final body = <String, dynamic>{'deUsuario': deUsuario, 'nombreCompleto': nombreCompleto, 'texto': texto};
+  Future<void> enviarMensaje(String deUsuario, String nombreCompleto, String texto, {required String canal, String? imagen}) async {
+    final body = <String, dynamic>{'deUsuario': deUsuario, 'nombreCompleto': nombreCompleto, 'texto': texto, 'canal': canal};
     if (imagen != null) body['imagen'] = imagen;
     final res = await http.post(
       Uri.parse('$kApiUrl/mensajes'),
