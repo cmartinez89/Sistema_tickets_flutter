@@ -124,11 +124,6 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _inputCtrl.addListener(_detectarMencion);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.jumpTo(_scrollCtrl.position.maxScrollExtent);
-      }
-    });
   }
 
   @override
@@ -177,26 +172,6 @@ class _ChatScreenState extends State<ChatScreen> {
       selection: TextSelection.collapsed(offset: atIdx + u.username.length + 2),
     );
     setState(() => _sugerencias = []);
-  }
-
-  @override
-  void didUpdateWidget(ChatScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.mensajes.length != oldWidget.mensajes.length) {
-      _scrollAlFinal();
-    }
-  }
-
-  void _scrollAlFinal() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
-      }
-    });
   }
 
   Future<void> _seleccionarImagen() async {
@@ -323,9 +298,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   )
                 : ListView.builder(
                     controller: _scrollCtrl,
+                    reverse: true,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                     itemCount: widget.mensajes.length,
-                    itemBuilder: (_, i) {
+                    itemBuilder: (_, reversedI) {
+                      final i = widget.mensajes.length - 1 - reversedI;
                       final msg = widget.mensajes[i];
                       final esMio = msg.deUsuario == widget.session.username;
                       final nuevoDia = i == 0 || !_mismoDia(widget.mensajes[i - 1].fecha, msg.fecha);
