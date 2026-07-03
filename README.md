@@ -20,12 +20,15 @@ Sistema de soporte TI para Beta Systems. Flutter Web PWA + FastAPI + MySQL en AW
 ## Arquitectura
 
 ```
-LoginScreen → MainLayout → [DashboardScreen, TicketsScreen, EquipmentScreen, PantallaRespaldos]
+LoginScreen → MainLayout → [DashboardScreen, TicketsScreen, EquipmentScreen, PantallaRespaldos,
+                            ProyectosScreen, TareasScreen (Kanban + Gantt), ChatScreen]
 ```
 
 - **Auth**: JWT con `python-jose`, bcrypt para contraseñas
-- **Estado**: `MainLayout` como dueño central, `onRefresh` callbacks
-- **WebSocket**: chat en tiempo real en `/ws`
+- **Estado**: `MainLayout` como dueño central (tickets, equipos, proyectos, tareas, usuarios, mensajes), `onRefresh` callbacks
+- **Dashboard**: pantalla de entrada para todos los roles — muestra el bloque de Soporte y/o el de Desarrollo según a qué tenga acceso cada quien
+- **Proyectos/Tareas**: Kanban + Gantt por proyecto; los desarrolladores solo pueden mover (drag) las tareas que tienen asignadas, aunque ven todas las del proyecto
+- **Chat**: 3 canales (Soporte, Desarrollo, General) vía WebSocket en `/ws`, visibles según el rol
 - **Bot Telegram**: `telegram_bot.py` — crea tickets por conversación con IA (Claude Haiku)
 - **Monitoreo**: systemd + cron cada 5 min + alertas email/Telegram
 
@@ -33,8 +36,11 @@ LoginScreen → MainLayout → [DashboardScreen, TicketsScreen, EquipmentScreen,
 
 | Rol | Acceso |
 |---|---|
-| `Admin` | Todos los tickets, inventario completo, catálogos |
-| `Técnico` | Solo tickets asignados a él |
+| `Admin` | Todo: tickets, inventario, catálogos, proyectos/tareas, los 3 canales de chat, gestión de usuarios |
+| `Técnico` | Solo tickets asignados a él; chat Soporte + General |
+| `Técnico Sr.` | Todos los tickets e inventario; chat Soporte + General |
+| `Desarrollador Sr.` | Solo Proyectos/Tareas/Chat — crea proyectos y tareas, asigna desarrolladores, mueve cualquier tarea; chat Desarrollo + General |
+| `Desarrollador` | Solo Proyectos/Tareas/Chat — ve todas las tareas del proyecto pero solo mueve las suyas; chat Desarrollo + General |
 
 ## Comandos de desarrollo
 
@@ -48,15 +54,16 @@ flutter analyze          # análisis estático
 
 ## Despliegue en producción
 
-```bash
-# Compilar web y subir al servidor
-flutter build web --release
-rsync -avz --delete build/web/ ubuntu@54.161.41.131:/var/www/soporte/
+```powershell
+# Build + deploy del frontend (build web, scp, permisos, fix de service worker)
+.\deploy.ps1
 
 # Compilar APK
 flutter build apk --release
 # APK en: build/app/outputs/flutter-apk/app-release.apk
 ```
+
+Si el cambio toca el backend, copiar `main_api.py` al servidor y reiniciar el servicio antes de correr `deploy.ps1` (ver sección "Subir cambios al servidor"). Si agrega una columna/tabla nueva, correr la migración en MySQL antes de reiniciar la API.
 
 ## Servicios en el servidor
 
@@ -109,6 +116,9 @@ ALERT_TO=cmartinez@beta.com.mx
 - **Ticket**: `id (TK-XXX)`, usuario, departamento, descripcion, prioridad, estado, asignadoA, area, categoria, tipo_ticket
 - **Equipo**: folio_activo, folio_responsiva, tipo, marca, modelo, no_serie, estatus, empleadoAsignado, ultimoRespaldo
 - **Usuario**: username, nombre_completo, rol, email, telegram_id, area
+- **Proyecto**: nombre, descripcion, fechaInicio, fechaFin, estado (activo/pausado/terminado), responsableUsername
+- **Tarea**: proyectoId, titulo, descripcion, estado (por_hacer/haciendo/en_revision/hecho), prioridad, asignadoAUsername, fechaInicio, fechaFin
+- **Mensaje (chat)**: deUsuario, nombreCompleto, texto, imagen, fecha, canal (soporte/desarrollo/general), borrado
 
 ## Alertas de respaldo
 
