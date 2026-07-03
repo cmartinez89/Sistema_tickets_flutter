@@ -3,6 +3,8 @@ import '../utils/notif_helper.dart';
 import '../models/session_model.dart';
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
+import '../models/proyecto_model.dart';
+import '../models/tarea_model.dart';
 import '../models/chat_message_model.dart';
 import '../models/usuario_model.dart';
 import '../services/api_service.dart';
@@ -38,6 +40,8 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   int _screenAnterior = 0;
   List<Ticket> _tickets = [];
   List<Equipo> _inventario = [];
+  List<Proyecto> _proyectos = [];
+  List<Tarea> _tareas = [];
   List<ChatMessage> _mensajes = [];
   List<Usuario> _usuarios = [];
   int _mensajesNoLeidos = 0;
@@ -53,7 +57,10 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       widget.session.rol == 'Desarrollador Sr.' ||
       widget.session.rol == 'Desarrollador';
   bool get _esAdmin => widget.session.rol == 'Admin';
-  int get _chatIndex => (_tieneSoporte ? 4 : 0) + (_tieneDesarrollo ? 2 : 0);
+
+  // Índice 0 es el Dashboard, siempre presente para toda sesión.
+  int get _devOffset => 1 + (_tieneSoporte ? 3 : 0);
+  int get _chatIndex => _devOffset + (_tieneDesarrollo ? 2 : 0);
 
   List<String> get _canalesChat {
     if (widget.session.rol == 'Admin') return ['soporte', 'desarrollo', 'general'];
@@ -107,14 +114,23 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   Future<void> _cargarDatos({bool silencioso = false}) async {
     if (!mounted) return;
     try {
-      final results = await Future.wait([_api.fetchTickets(), _api.fetchEquipos()]);
+      final results = await Future.wait([
+        _api.fetchTickets(),
+        _api.fetchEquipos(),
+        _api.fetchProyectos(),
+        _api.fetchTareas(),
+      ]);
       if (!mounted) return;
       final nuevosTickets = results[0] as List<Ticket>;
       final nuevosEquipos = results[1] as List<Equipo>;
+      final nuevosProyectos = results[2] as List<Proyecto>;
+      final nuevasTareas = results[3] as List<Tarea>;
       if (silencioso) _detectarCambiosYNotificar(nuevosTickets);
       setState(() {
         _tickets = nuevosTickets;
         _inventario = nuevosEquipos;
+        _proyectos = nuevosProyectos;
+        _tareas = nuevasTareas;
         _cargandoInicial = false;
       });
     } catch (e) {
@@ -249,8 +265,19 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     }
 
     final screens = [
+      DashboardScreen(
+        tickets: _tickets,
+        inventario: _inventario,
+        proyectos: _proyectos,
+        tareas: _tareas,
+        session: widget.session,
+        onNavigateTickets: () => setState(() => _screenIndex = 1),
+        onNavigateEquipos: () => setState(() => _screenIndex = 2),
+        onNavigateRespaldos: () => setState(() => _screenIndex = 3),
+        onNavigateProyectos: () => setState(() => _screenIndex = _devOffset),
+        onNavigateTareas: () => setState(() => _screenIndex = _devOffset + 1),
+      ),
       if (_tieneSoporte) ...[
-        DashboardScreen(tickets: _tickets, inventario: _inventario, session: widget.session, onNavigate: (i) => setState(() => _screenIndex = i)),
         TicketsScreen(tickets: _tickets, usuarios: _usuarios, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
         EquipmentScreen(inventario: _inventario, session: widget.session, api: _api, onRefresh: () => _cargarDatos(silencioso: true)),
         PantallaRespaldos(inventario: _inventario, api: _api, onRefresh: () => _cargarDatos(silencioso: true), session: widget.session),
@@ -302,8 +329,6 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         ],
       ),
       drawer: Builder(builder: (ctx) {
-        final int soporteCount = _tieneSoporte ? 4 : 0;
-        final int devOffset = _tieneDesarrollo ? soporteCount : -1;
         final int adminOffset = _chatIndex + 1;
 
         return Drawer(
@@ -325,10 +350,11 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                   ],
                 ),
               ),
+              _item(Icons.dashboard_rounded, 'Dashboard', 0),
               // ── Soporte Técnico ──────────────────────────────────────
               if (_tieneSoporte) ...[
+                const Divider(indent: 16, endIndent: 16),
                 _sectionHeader('Soporte Técnico'),
-                _item(Icons.dashboard_rounded, 'Dashboard', 0),
                 _item(Icons.confirmation_number_rounded, 'Tickets / Asignaciones', 1),
                 _item(Icons.computer_rounded, 'Equipos / Responsivas', 2),
                 _item(Icons.backup_rounded, 'Control de Respaldos', 3),
@@ -337,8 +363,8 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
               if (_tieneDesarrollo) ...[
                 const Divider(indent: 16, endIndent: 16),
                 _sectionHeader('Desarrollo'),
-                _item(Icons.folder_special_rounded, 'Proyectos', devOffset),
-                _item(Icons.task_alt_rounded, 'Tareas', devOffset + 1),
+                _item(Icons.folder_special_rounded, 'Proyectos', _devOffset),
+                _item(Icons.task_alt_rounded, 'Tareas', _devOffset + 1),
               ],
               // ── Chat ───────────────────────────────────────────────
               const Divider(indent: 16, endIndent: 16),
