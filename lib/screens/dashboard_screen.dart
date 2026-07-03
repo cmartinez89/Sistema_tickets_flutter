@@ -1,21 +1,48 @@
 import 'package:flutter/material.dart';
 import '../models/ticket_model.dart';
 import '../models/equipo_model.dart';
+import '../models/proyecto_model.dart';
+import '../models/tarea_model.dart';
 import '../models/session_model.dart';
 
 class DashboardScreen extends StatelessWidget {
   final List<Ticket> tickets;
   final List<Equipo> inventario;
+  final List<Proyecto> proyectos;
+  final List<Tarea> tareas;
   final Session session;
-  final void Function(int) onNavigate;
+  final VoidCallback onNavigateTickets;
+  final VoidCallback onNavigateEquipos;
+  final VoidCallback onNavigateRespaldos;
+  final VoidCallback onNavigateProyectos;
+  final VoidCallback onNavigateTareas;
 
   const DashboardScreen({
     super.key,
     required this.tickets,
     required this.inventario,
+    required this.proyectos,
+    required this.tareas,
     required this.session,
-    required this.onNavigate,
+    required this.onNavigateTickets,
+    required this.onNavigateEquipos,
+    required this.onNavigateRespaldos,
+    required this.onNavigateProyectos,
+    required this.onNavigateTareas,
   });
+
+  bool get _soporteVisible =>
+      session.rol != 'Desarrollador Sr.' && session.rol != 'Desarrollador';
+  bool get _desarrolloVisible =>
+      session.rol == 'Admin' || session.rol == 'Desarrollador Sr.' || session.rol == 'Desarrollador';
+  bool get _vistaGlobalDesarrollo => session.rol == 'Admin' || session.rol == 'Desarrollador Sr.';
+
+  String get _tituloHeader => switch (session.rol) {
+        'Admin' => 'Consola de Control Global',
+        'Desarrollador Sr.' => 'Consola de Desarrollo',
+        'Desarrollador' => 'Mis Tareas de Desarrollo',
+        _ => 'Mis Tareas TI',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +71,24 @@ class DashboardScreen extends StatelessWidget {
         ? (List<Ticket>.from(tickets)..sort((a, b) => b.fecha.compareTo(a.fecha))).take(5).toList()
         : <Ticket>[];
 
+    final tareasVisibles = _vistaGlobalDesarrollo
+        ? tareas
+        : tareas.where((t) => t.asignadoAUsername == session.username).toList();
+
+    final totalProyectos = proyectos.length;
+    final proyectosActivos = proyectos.where((p) => p.estado == 'activo').length;
+
+    final totalTareasVisibles = tareasVisibles.length;
+    final tareasPorHacer = tareasVisibles.where((t) => t.estado == 'por_hacer').length;
+    final tareasHaciendo = tareasVisibles.where((t) => t.estado == 'haciendo').length;
+    final tareasEnRevision = tareasVisibles.where((t) => t.estado == 'en_revision').length;
+    final tareasAltaPendiente =
+        tareasVisibles.where((t) => t.prioridad == 'alta' && t.estado != 'hecho').length;
+
+    final proyectosRecientes = _vistaGlobalDesarrollo
+        ? (List<Proyecto>.from(proyectos)..sort((a, b) => b.fechaInicio.compareTo(a.fechaInicio))).take(5).toList()
+        : <Proyecto>[];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       body: LayoutBuilder(
@@ -65,44 +110,72 @@ class DashboardScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _headerCard(),
-                if (pendientes > 0 || alta > 0 || sinRespaldo > 0 || escalados > 0) ...[
+                if (_soporteVisible && (pendientes > 0 || alta > 0 || sinRespaldo > 0 || escalados > 0)) ...[
                   const SizedBox(height: 14),
                   _alertStrip(pendientes: pendientes, alta: alta, sinRespaldo: sinRespaldo, escalados: escalados),
                 ],
                 const SizedBox(height: 28),
 
-                _sectionHeader('Tickets de Soporte', Icons.confirmation_number_rounded, Colors.indigo),
-                const SizedBox(height: 14),
-                _cardGrid(col: col, cardHeight: cardHeight, children: [
-                  _cardDonut(titulo: 'Pendientes', numero: '$pendientes', subtitulo: 'de $total tickets', progreso: total > 0 ? pendientes / total : 0, color: Colors.red.shade600, icono: Icons.hourglass_top_rounded, narrow: narrow, onTap: () => onNavigate(1)),
-                  _cardDonut(titulo: 'En Proceso', numero: '$enProceso', subtitulo: 'de $total tickets', progreso: total > 0 ? enProceso / total : 0, color: Colors.orange.shade700, icono: Icons.autorenew_rounded, narrow: narrow, onTap: () => onNavigate(1)),
-                  _cardDonut(titulo: 'Resueltos', numero: '$resueltos', subtitulo: 'de $total tickets', progreso: total > 0 ? resueltos / total : 0, color: Colors.green.shade600, icono: Icons.check_circle_rounded, narrow: narrow, onTap: () => onNavigate(1)),
-                  _cardDonut(titulo: 'Prioridad Alta', numero: '$alta', subtitulo: 'sin resolver', progreso: total > 0 ? alta / total : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, onTap: () => onNavigate(1)),
-                ]),
-                const SizedBox(height: 32),
-
-                _sectionHeader('Inventario de Equipos', Icons.computer_rounded, const Color(0xFF1A2B72)),
-                const SizedBox(height: 14),
-                _cardGrid(col: col, cardHeight: cardHeight, children: [
-                  _cardDonut(titulo: 'Asignados', numero: '$asignados', subtitulo: 'de $totalEquipos equipos', progreso: totalEquipos > 0 ? asignados / totalEquipos : 0, color: Colors.indigo.shade600, icono: Icons.person_rounded, narrow: narrow, onTap: () => onNavigate(2)),
-                  _cardDonut(titulo: 'Disponibles', numero: '$disponibles', subtitulo: 'en almacén', progreso: totalEquipos > 0 ? disponibles / totalEquipos : 0, color: Colors.blue.shade700, icono: Icons.inventory_2_rounded, narrow: narrow, onTap: () => onNavigate(2)),
-                  _cardStat(titulo: 'Valor del Inventario', numero: '\$${_formatMiles(valorTotal)}', subtitulo: 'MXN depreciado', color: Colors.blueGrey.shade700, icono: Icons.account_balance_wallet_rounded, narrow: narrow, onTap: () => onNavigate(2)),
-                  _cardStat(titulo: 'Total de Equipos', numero: '$totalEquipos', subtitulo: 'registrados', color: Colors.blue.shade700, icono: Icons.devices_rounded, narrow: narrow, onTap: () => onNavigate(2)),
-                ]),
-                const SizedBox(height: 32),
-
-                _sectionHeader('Estado de Respaldos', Icons.backup_rounded, Colors.purple),
-                const SizedBox(height: 14),
-                _cardGrid(col: col, cardHeight: cardHeight, children: [
-                  _cardDonut(titulo: 'Al día', numero: '$conRespaldo', subtitulo: 'últimos 15 días', progreso: totalEquipos > 0 ? conRespaldo / totalEquipos : 0, color: Colors.green.shade600, icono: Icons.cloud_done_rounded, narrow: narrow, onTap: () => onNavigate(3)),
-                  _cardDonut(titulo: 'Atrasados', numero: '$sinRespaldo', subtitulo: '+15 días sin respaldo', progreso: totalEquipos > 0 ? sinRespaldo / totalEquipos : 0, color: Colors.red.shade600, icono: Icons.cloud_off_rounded, narrow: narrow, onTap: () => onNavigate(3)),
-                ]),
-
-                if (recientes.isNotEmpty) ...[
-                  const SizedBox(height: 32),
-                  _sectionHeader('Últimos Tickets Registrados', Icons.history_rounded, Colors.blueGrey),
+                if (_soporteVisible) ...[
+                  _sectionHeader('Tickets de Soporte', Icons.confirmation_number_rounded, Colors.indigo),
                   const SizedBox(height: 14),
-                  _recentTicketsCard(recientes),
+                  _cardGrid(col: col, cardHeight: cardHeight, children: [
+                    _cardDonut(titulo: 'Pendientes', numero: '$pendientes', subtitulo: 'de $total tickets', progreso: total > 0 ? pendientes / total : 0, color: Colors.red.shade600, icono: Icons.hourglass_top_rounded, narrow: narrow, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'En Proceso', numero: '$enProceso', subtitulo: 'de $total tickets', progreso: total > 0 ? enProceso / total : 0, color: Colors.orange.shade700, icono: Icons.autorenew_rounded, narrow: narrow, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'Resueltos', numero: '$resueltos', subtitulo: 'de $total tickets', progreso: total > 0 ? resueltos / total : 0, color: Colors.green.shade600, icono: Icons.check_circle_rounded, narrow: narrow, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'Prioridad Alta', numero: '$alta', subtitulo: 'sin resolver', progreso: total > 0 ? alta / total : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, onTap: onNavigateTickets),
+                  ]),
+                  const SizedBox(height: 32),
+
+                  _sectionHeader('Inventario de Equipos', Icons.computer_rounded, const Color(0xFF1A2B72)),
+                  const SizedBox(height: 14),
+                  _cardGrid(col: col, cardHeight: cardHeight, children: [
+                    _cardDonut(titulo: 'Asignados', numero: '$asignados', subtitulo: 'de $totalEquipos equipos', progreso: totalEquipos > 0 ? asignados / totalEquipos : 0, color: Colors.indigo.shade600, icono: Icons.person_rounded, narrow: narrow, onTap: onNavigateEquipos),
+                    _cardDonut(titulo: 'Disponibles', numero: '$disponibles', subtitulo: 'en almacén', progreso: totalEquipos > 0 ? disponibles / totalEquipos : 0, color: Colors.blue.shade700, icono: Icons.inventory_2_rounded, narrow: narrow, onTap: onNavigateEquipos),
+                    _cardStat(titulo: 'Valor del Inventario', numero: '\$${_formatMiles(valorTotal)}', subtitulo: 'MXN depreciado', color: Colors.blueGrey.shade700, icono: Icons.account_balance_wallet_rounded, narrow: narrow, onTap: onNavigateEquipos),
+                    _cardStat(titulo: 'Total de Equipos', numero: '$totalEquipos', subtitulo: 'registrados', color: Colors.blue.shade700, icono: Icons.devices_rounded, narrow: narrow, onTap: onNavigateEquipos),
+                  ]),
+                  const SizedBox(height: 32),
+
+                  _sectionHeader('Estado de Respaldos', Icons.backup_rounded, Colors.purple),
+                  const SizedBox(height: 14),
+                  _cardGrid(col: col, cardHeight: cardHeight, children: [
+                    _cardDonut(titulo: 'Al día', numero: '$conRespaldo', subtitulo: 'últimos 15 días', progreso: totalEquipos > 0 ? conRespaldo / totalEquipos : 0, color: Colors.green.shade600, icono: Icons.cloud_done_rounded, narrow: narrow, onTap: onNavigateRespaldos),
+                    _cardDonut(titulo: 'Atrasados', numero: '$sinRespaldo', subtitulo: '+15 días sin respaldo', progreso: totalEquipos > 0 ? sinRespaldo / totalEquipos : 0, color: Colors.red.shade600, icono: Icons.cloud_off_rounded, narrow: narrow, onTap: onNavigateRespaldos),
+                  ]),
+
+                  if (recientes.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    _sectionHeader('Últimos Tickets Registrados', Icons.history_rounded, Colors.blueGrey),
+                    const SizedBox(height: 14),
+                    _recentTicketsCard(recientes),
+                  ],
+                ],
+
+                if (_desarrolloVisible) ...[
+                  if (_soporteVisible) const SizedBox(height: 32),
+                  _sectionHeader('Proyectos', Icons.folder_special_rounded, Colors.teal),
+                  const SizedBox(height: 14),
+                  _cardGrid(col: col, cardHeight: cardHeight, children: [
+                    _cardStat(titulo: 'Proyectos Activos', numero: '$proyectosActivos', subtitulo: 'de $totalProyectos totales', color: Colors.teal.shade700, icono: Icons.folder_special_rounded, narrow: narrow, onTap: onNavigateProyectos),
+                  ]),
+                  const SizedBox(height: 32),
+
+                  _sectionHeader(_vistaGlobalDesarrollo ? 'Tareas del Equipo' : 'Mis Tareas', Icons.task_alt_rounded, Colors.deepPurple),
+                  const SizedBox(height: 14),
+                  _cardGrid(col: col, cardHeight: cardHeight, children: [
+                    _cardDonut(titulo: 'Por hacer', numero: '$tareasPorHacer', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasPorHacer / totalTareasVisibles : 0, color: Colors.grey.shade600, icono: Icons.pending_actions_rounded, narrow: narrow, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'Haciendo', numero: '$tareasHaciendo', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasHaciendo / totalTareasVisibles : 0, color: Colors.blue.shade700, icono: Icons.autorenew_rounded, narrow: narrow, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'En revisión', numero: '$tareasEnRevision', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasEnRevision / totalTareasVisibles : 0, color: Colors.orange.shade700, icono: Icons.rate_review_rounded, narrow: narrow, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'Prioridad alta', numero: '$tareasAltaPendiente', subtitulo: 'sin terminar', progreso: totalTareasVisibles > 0 ? tareasAltaPendiente / totalTareasVisibles : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, onTap: onNavigateTareas),
+                  ]),
+
+                  if (proyectosRecientes.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    _sectionHeader('Proyectos Recientes', Icons.history_rounded, Colors.blueGrey),
+                    const SizedBox(height: 14),
+                    _recentProjectsCard(proyectosRecientes),
+                  ],
                 ],
                 const SizedBox(height: 24),
               ],
@@ -145,7 +218,7 @@ class DashboardScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  session.rol == 'Admin' ? 'Consola de Control Global' : 'Mis Tareas TI',
+                  _tituloHeader,
                   style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 3),
@@ -185,10 +258,10 @@ class DashboardScreen extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: [
-                if (pendientes > 0) _alertChip('$pendientes pendiente${pendientes > 1 ? 's' : ''}', Colors.red.shade600, Icons.hourglass_top_rounded, () => onNavigate(1)),
-                if (alta > 0) _alertChip('$alta prioridad alta', Colors.deepOrange.shade700, Icons.priority_high_rounded, () => onNavigate(1)),
-                if (escalados > 0) _alertChip('$escalados escalado${escalados > 1 ? 's' : ''}', Colors.purple.shade700, Icons.escalator_warning_rounded, () => onNavigate(1)),
-                if (sinRespaldo > 0) _alertChip('$sinRespaldo sin respaldo', Colors.amber.shade800, Icons.cloud_off_rounded, () => onNavigate(3)),
+                if (pendientes > 0) _alertChip('$pendientes pendiente${pendientes > 1 ? 's' : ''}', Colors.red.shade600, Icons.hourglass_top_rounded, onNavigateTickets),
+                if (alta > 0) _alertChip('$alta prioridad alta', Colors.deepOrange.shade700, Icons.priority_high_rounded, onNavigateTickets),
+                if (escalados > 0) _alertChip('$escalados escalado${escalados > 1 ? 's' : ''}', Colors.purple.shade700, Icons.escalator_warning_rounded, onNavigateTickets),
+                if (sinRespaldo > 0) _alertChip('$sinRespaldo sin respaldo', Colors.amber.shade800, Icons.cloud_off_rounded, onNavigateRespaldos),
               ],
             ),
           ),
@@ -410,7 +483,7 @@ class DashboardScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Column(
           children: recientes.asMap().entries.map((entry) {
-            return _ticketRow(entry.value, isLast: entry.key == recientes.length - 1, onTap: () => onNavigate(1));
+            return _ticketRow(entry.value, isLast: entry.key == recientes.length - 1, onTap: onNavigateTickets);
           }).toList(),
         ),
       ),
@@ -464,6 +537,66 @@ class DashboardScreen extends StatelessWidget {
             ],
           ),
         ),
+        ),
+        if (!isLast) Divider(height: 1, color: Colors.grey.shade100),
+      ],
+    );
+  }
+
+  Widget _recentProjectsCard(List<Proyecto> recientes) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          children: recientes.asMap().entries.map((entry) {
+            return _projectRow(entry.value, isLast: entry.key == recientes.length - 1, onTap: onNavigateProyectos);
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _projectRow(Proyecto p, {required bool isLast, VoidCallback? onTap}) {
+    final estadoColor = switch (p.estado) {
+      'terminado' => Colors.green.shade600,
+      'pausado' => Colors.orange.shade700,
+      _ => const Color(0xFF1A2B72),
+    };
+
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          mouseCursor: SystemMouseCursors.click,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: estadoColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(Icons.folder_special_rounded, color: estadoColor, size: 15),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(p.nombre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text('${p.tareasHecho}/${p.tareasTotal} tareas', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _statusChip(p.estado, estadoColor),
+              ],
+            ),
+          ),
         ),
         if (!isLast) Divider(height: 1, color: Colors.grey.shade100),
       ],
