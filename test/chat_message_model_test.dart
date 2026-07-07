@@ -14,4 +14,25 @@ void main() {
     final esperado = DateTime.utc(2026, 7, 1, 20, 32, 15).toLocal();
     expect(msg.fecha, esperado);
   });
+
+  test('respuestaA se parsea desde el map cuando viene presente', () {
+    final msg = ChatMessage.fromMap({
+      'id': '2',
+      'deUsuario': 'jdoe',
+      'nombreCompleto': 'John Doe',
+      'texto': 'respondiendo',
+      'fecha': '2026-07-01T20:32:15.000000',
+      'respuestaA': 1,
+    });
+    expect(msg.respuestaA, 1);
+
+    final sinRespuesta = ChatMessage.fromMap({
+      'id': '3',
+      'deUsuario': 'jdoe',
+      'nombreCompleto': 'John Doe',
+      'texto': 'normal',
+      'fecha': '2026-07-01T20:32:15.000000',
+    });
+    expect(sinRespuesta.respuestaA, null);
+  });
 }
