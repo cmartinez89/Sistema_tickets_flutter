@@ -293,6 +293,9 @@ class TicketResolverRequest(BaseModel):
     imagenResolucion: Optional[str] = None
     usuario: Optional[str] = None
 
+class TicketComentarioRequest(BaseModel):
+    texto: str
+
 class EquipoCreateRequest(BaseModel):
     folioResponsiva: Optional[str] = '---'
     tipo: str
@@ -610,6 +613,56 @@ def get_ticket_historial(ticket_id: str, current_user: dict = Depends(get_curren
             return rows
     finally:
         connection.close()
+
+@app.get("/tickets/{ticket_id}/comentarios")
+def get_ticket_comentarios(ticket_id: str, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT id, ticket_id AS ticketId, usuario, nombre_completo AS nombreCompleto,
+                          texto, fecha
+                   FROM ticket_comentarios WHERE ticket_id = %s ORDER BY fecha ASC""",
+                (ticket_id,)
+            )
+            rows = cursor.fetchall()
+            for r in rows:
+                r['id'] = str(r['id'])
+                if isinstance(r['fecha'], datetime):
+                    r['fecha'] = r['fecha'].isoformat()
+            return rows
+    finally:
+        connection.close()
+
+@app.post("/tickets/{ticket_id}/comentarios")
+async def create_ticket_comentario(ticket_id: str, req: TicketComentarioRequest, current_user: dict = Depends(get_current_user)):
+    texto = req.texto.strip()
+    if not texto:
+        raise HTTPException(status_code=400, detail="El comentario no puede estar vacío")
+    usuario = current_user["username"]
+    nombre_completo = current_user.get("nombreCompleto") or usuario
+    ahora = datetime.now()
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO ticket_comentarios (ticket_id, usuario, nombre_completo, texto, fecha) VALUES (%s, %s, %s, %s, %s)",
+                (ticket_id, usuario, nombre_completo, texto, ahora)
+            )
+            connection.commit()
+            nuevo_id = cursor.lastrowid
+    finally:
+        connection.close()
+    payload = {
+        "id": str(nuevo_id),
+        "ticketId": ticket_id,
+        "usuario": usuario,
+        "nombreCompleto": nombre_completo,
+        "texto": texto,
+        "fecha": ahora.isoformat(),
+    }
+    await manager.broadcast({"tipo": "comentario", "ticketId": ticket_id})
+    return payload
 
 # ============================================================================
 # EQUIPOS
