@@ -477,7 +477,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 1.2,
-                color: Colors.grey[500])),
+                color: Theme.of(context).colorScheme.onSurfaceVariant)),
       );
 
   ListTile _item(IconData icon, String label, int index) => ListTile(

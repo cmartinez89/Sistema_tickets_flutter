@@ -44,9 +44,9 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Tu contraseña fue reseteada por el administrador. Por seguridad, elige una nueva contraseña para continuar.',
-                  style: TextStyle(fontSize: 13, color: Colors.blueGrey),
+                  style: TextStyle(fontSize: 13, color: Theme.of(ctx).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
@@ -124,13 +124,13 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('¿Olvidaste tu contraseña?'),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Contacta al administrador del sistema para restablecer tu contraseña.'),
-            SizedBox(height: 12),
-            Text('El administrador puede actualizar tu contraseña desde el Panel de Gestión de Usuarios.', style: TextStyle(color: Colors.blueGrey, fontSize: 13)),
+            const Text('Contacta al administrador del sistema para restablecer tu contraseña.'),
+            const SizedBox(height: 12),
+            Text('El administrador puede actualizar tu contraseña desde el Panel de Gestión de Usuarios.', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontSize: 13)),
           ],
         ),
         actions: [
@@ -218,7 +218,7 @@ class _LoginScreenState extends State<LoginScreen> {
     const navy = Color(0xFF1A2B72);
     const red = Color(0xFFDC0026);
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F8),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: Center(
         child: SingleChildScrollView(
           child: Padding(
@@ -232,9 +232,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   'Beta Systems',
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: navy, letterSpacing: 0.5),
                 ),
-                const Text(
+                Text(
                   'Sistema de Soporte TI',
-                  style: TextStyle(fontSize: 13, color: Colors.blueGrey),
+                  style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 28),
                 Card(
@@ -252,8 +252,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           const Text('Iniciar sesión',
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: navy)),
                           const SizedBox(height: 4),
-                          const Text('Ingresa tus credenciales para continuar',
-                              style: TextStyle(fontSize: 12, color: Colors.blueGrey)),
+                          Text('Ingresa tus credenciales para continuar',
+                              style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                           const SizedBox(height: 24),
                       TextFormField(
                         controller: _userCtrl,
