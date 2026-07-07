@@ -388,6 +388,7 @@ class UsuarioUpdateRequest(BaseModel):
     email: Optional[str] = None
     rol: Optional[str] = None
     password: Optional[str] = None
+    nuevoUsername: Optional[str] = None
 
 class CatalogoItemRequest(BaseModel):
     nombre: str
@@ -1332,6 +1333,11 @@ async def create_usuario(req: UsuarioCreateRequest, current_user: dict = Depends
 async def update_usuario(username: str, req: UsuarioUpdateRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("rol") != "Admin":
         raise HTTPException(status_code=403, detail="Solo el administrador puede modificar usuarios")
+    nuevo_username = None
+    if req.nuevoUsername is not None:
+        nuevo_username = req.nuevoUsername.strip().lower()
+        if not nuevo_username:
+            raise HTTPException(status_code=400, detail="El nuevo username no puede estar vacío")
     connection = get_db_connection()
     try:
         with connection.cursor() as cursor:
@@ -1345,17 +1351,32 @@ async def update_usuario(username: str, req: UsuarioUpdateRequest, current_user:
                 campos.append("rol = %s"); valores.append(req.rol)
             if req.password is not None and req.password.strip():
                 campos.append("password = %s"); valores.append(_hash_password(req.password.strip()))
+                campos.append("forzar_cambio_password = 1")
+            if nuevo_username and nuevo_username != username:
+                cursor.execute("SELECT username FROM usuarios WHERE username = %s", (nuevo_username,))
+                if cursor.fetchone():
+                    raise HTTPException(status_code=409, detail="Ese nombre de usuario ya existe")
+                campos.append("username = %s"); valores.append(nuevo_username)
             if not campos:
                 raise HTTPException(status_code=400, detail="Sin campos a actualizar")
             valores.append(username)
             cursor.execute(f"UPDATE usuarios SET {', '.join(campos)} WHERE username = %s", valores)
-            connection.commit()
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            if nuevo_username and nuevo_username != username:
+                for tabla, columna in [
+                    ("tickets", "usuario"), ("tickets", "asignado_a"),
+                    ("ticket_comentarios", "usuario"),
+                    ("mensajes", "de_usuario"), ("mensajes", "borrado_por"),
+                    ("proyectos", "responsable_username"),
+                    ("tareas", "asignado_a_username"),
+                ]:
+                    cursor.execute(f"UPDATE {tabla} SET {columna} = %s WHERE {columna} = %s", (nuevo_username, username))
+            connection.commit()
     finally:
         connection.close()
     await manager.broadcast({"tipo": "usuarios", "accion": "actualizado"})
-    return {"status": "success"}
+    return {"status": "success", "username": nuevo_username or username}
 
 @app.delete("/usuarios/{username}")
 async def delete_usuario(username: str, current_user: dict = Depends(get_current_user)):
