@@ -58,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     prefixIcon: Icon(Icons.lock_outline),
                   ),
                   validator: (v) {
-                    if (v == null || v.trim().length < 4) return 'Mínimo 4 caracteres';
+                    if (v == null || v.trim().length < 6) return 'Mínimo 6 caracteres';
                     return null;
                   },
                 ),
