@@ -179,9 +179,11 @@ class ApiService {
     required String email,
     required String rol,
     String? password,
+    String? nuevoUsername,
   }) async {
     final body = <String, dynamic>{'nombreCompleto': nombreCompleto, 'email': email, 'rol': rol};
     if (password != null) body['password'] = password;
+    if (nuevoUsername != null) body['nuevoUsername'] = nuevoUsername;
     final res = await http.put(
       Uri.parse('$kApiUrl/usuarios/$username'),
       headers: _headers,
@@ -214,9 +216,10 @@ class ApiService {
     return (jsonDecode(res.body) as List).map((e) => ChatMessage.fromMap(e)).toList();
   }
 
-  Future<void> enviarMensaje(String deUsuario, String nombreCompleto, String texto, {required String canal, String? imagen}) async {
+  Future<void> enviarMensaje(String deUsuario, String nombreCompleto, String texto, {required String canal, String? imagen, int? respuestaA}) async {
     final body = <String, dynamic>{'deUsuario': deUsuario, 'nombreCompleto': nombreCompleto, 'texto': texto, 'canal': canal};
     if (imagen != null) body['imagen'] = imagen;
+    if (respuestaA != null) body['respuestaA'] = respuestaA;
     final res = await http.post(
       Uri.parse('$kApiUrl/mensajes'),
       headers: _headers,
