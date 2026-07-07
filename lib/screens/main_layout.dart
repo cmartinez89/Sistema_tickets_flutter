@@ -265,23 +265,26 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         builder: (ctx, _) => SimpleDialog(
           title: const Text('Apariencia'),
           children: [
-            RadioListTile<ThemeMode>(
-              title: const Text('Claro'),
-              value: ThemeMode.light,
+            RadioGroup<ThemeMode>(
               groupValue: themeController.mode,
               onChanged: (v) => themeController.cambiar(v!),
-            ),
-            RadioListTile<ThemeMode>(
-              title: const Text('Oscuro'),
-              value: ThemeMode.dark,
-              groupValue: themeController.mode,
-              onChanged: (v) => themeController.cambiar(v!),
-            ),
-            RadioListTile<ThemeMode>(
-              title: const Text('Igual que el sistema'),
-              value: ThemeMode.system,
-              groupValue: themeController.mode,
-              onChanged: (v) => themeController.cambiar(v!),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RadioListTile<ThemeMode>(
+                    title: Text('Claro'),
+                    value: ThemeMode.light,
+                  ),
+                  RadioListTile<ThemeMode>(
+                    title: Text('Oscuro'),
+                    value: ThemeMode.dark,
+                  ),
+                  RadioListTile<ThemeMode>(
+                    title: Text('Igual que el sistema'),
+                    value: ThemeMode.system,
+                  ),
+                ],
+              ),
             ),
           ],
         ),
