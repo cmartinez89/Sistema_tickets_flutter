@@ -126,6 +126,22 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
+def _ensure_schema():
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT COUNT(*) AS c FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mensajes' AND COLUMN_NAME = 'respuesta_a'
+            """)
+            if cursor.fetchone()['c'] == 0:
+                cursor.execute("ALTER TABLE mensajes ADD COLUMN respuesta_a INT NULL")
+                connection.commit()
+    finally:
+        connection.close()
+
+_ensure_schema()
+
 # ── SQL constants ──────────────────────────────────────────────────────────────
 
 TICKET_SELECT = """
@@ -358,6 +374,7 @@ class MensajeRequest(BaseModel):
     texto: str = ''
     imagen: Optional[str] = None
     canal: str
+    respuestaA: Optional[int] = None
 
 class UsuarioCreateRequest(BaseModel):
     username: str
@@ -1385,7 +1402,7 @@ def get_mensajes(current_user: dict = Depends(get_current_user)):
                     SELECT id, de_usuario AS deUsuario, nombre_completo AS nombreCompleto,
                            texto, imagen, fecha, canal,
                            COALESCE(borrado, 0) AS borrado,
-                           borrado_por AS borradoPor
+                           borrado_por AS borradoPor, respuesta_a AS respuestaA
                     FROM mensajes ORDER BY fecha DESC LIMIT 200
                 ) sub ORDER BY fecha ASC
             """)
@@ -1438,8 +1455,8 @@ async def create_mensaje(req: MensajeRequest, current_user: dict = Depends(get_c
     try:
         with connection.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO mensajes (de_usuario, nombre_completo, texto, imagen, fecha, canal) VALUES (%s, %s, %s, %s, %s, %s)",
-                (de_usuario, nombre_completo, texto, req.imagen, ahora, req.canal)
+                "INSERT INTO mensajes (de_usuario, nombre_completo, texto, imagen, fecha, canal, respuesta_a) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (de_usuario, nombre_completo, texto, req.imagen, ahora, req.canal, req.respuestaA)
             )
             connection.commit()
             nuevo_id = cursor.lastrowid
@@ -1454,6 +1471,7 @@ async def create_mensaje(req: MensajeRequest, current_user: dict = Depends(get_c
         "imagen": req.imagen,
         "fecha": ahora.isoformat(),
         "canal": req.canal,
+        "respuestaA": req.respuestaA,
     }
     await manager.broadcast(payload)
     return payload
