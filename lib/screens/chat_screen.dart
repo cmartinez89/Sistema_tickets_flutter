@@ -130,6 +130,10 @@ class _ChatScreenState extends State<ChatScreen> {
   late String _canalActivo;
   ChatMessage? _respondiendoA;
   final Map<String, GlobalKey> _mensajeKeys = {};
+  bool _buscando = false;
+  final _busquedaCtrl = TextEditingController();
+  List<String> _coincidencias = [];
+  int _coincidenciaActual = -1;
 
   List<ChatMessage> get _mensajesDelCanal =>
       widget.mensajes.where((m) => m.canal == _canalActivo).toList();
@@ -155,6 +159,44 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _respondiendoA = msg);
   }
 
+  void _buscar(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) {
+      setState(() {
+        _coincidencias = [];
+        _coincidenciaActual = -1;
+      });
+      return;
+    }
+    final ids = _mensajesDelCanal.where((m) => m.texto.toLowerCase().contains(q)).map((m) => m.id).toList();
+    setState(() {
+      _coincidencias = ids;
+      _coincidenciaActual = ids.isEmpty ? -1 : ids.length - 1;
+    });
+    if (_coincidencias.isNotEmpty) _irAMensaje(_coincidencias[_coincidenciaActual]);
+  }
+
+  void _siguienteCoincidencia() {
+    if (_coincidencias.isEmpty) return;
+    setState(() => _coincidenciaActual = (_coincidenciaActual - 1 + _coincidencias.length) % _coincidencias.length);
+    _irAMensaje(_coincidencias[_coincidenciaActual]);
+  }
+
+  void _anteriorCoincidencia() {
+    if (_coincidencias.isEmpty) return;
+    setState(() => _coincidenciaActual = (_coincidenciaActual + 1) % _coincidencias.length);
+    _irAMensaje(_coincidencias[_coincidenciaActual]);
+  }
+
+  void _cerrarBusqueda() {
+    _busquedaCtrl.clear();
+    setState(() {
+      _buscando = false;
+      _coincidencias = [];
+      _coincidenciaActual = -1;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -167,6 +209,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _inputCtrl.removeListener(_detectarMencion);
     _inputCtrl.dispose();
     _scrollCtrl.dispose();
+    _busquedaCtrl.dispose();
     super.dispose();
   }
 
@@ -309,18 +352,49 @@ class _ChatScreenState extends State<ChatScreen> {
                   )
                 else
                   const SizedBox(width: 16),
-                CircleAvatar(
-                  backgroundColor: primary.withValues(alpha: 0.12),
-                  child: Icon(Icons.groups_rounded, color: primary, size: 20),
+                if (!_buscando) ...[
+                  CircleAvatar(
+                    backgroundColor: primary.withValues(alpha: 0.12),
+                    child: Icon(Icons.groups_rounded, color: primary, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: _buscando
+                      ? TextField(
+                          controller: _busquedaCtrl,
+                          autofocus: true,
+                          onChanged: _buscar,
+                          decoration: const InputDecoration(
+                            hintText: 'Buscar en este canal...',
+                            border: InputBorder.none,
+                          ),
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Chat Interno TI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                            Text(_kCanalLabel[_canalActivo] ?? _canalActivo,
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                          ],
+                        ),
                 ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Chat Interno TI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    Text(_kCanalLabel[_canalActivo] ?? _canalActivo,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                  ],
+                if (_buscando && _coincidencias.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      '${_coincidencias.length - _coincidenciaActual}/${_coincidencias.length}',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                    ),
+                  ),
+                if (_buscando) ...[
+                  IconButton(icon: const Icon(Icons.keyboard_arrow_up), onPressed: _anteriorCoincidencia),
+                  IconButton(icon: const Icon(Icons.keyboard_arrow_down), onPressed: _siguienteCoincidencia),
+                ],
+                IconButton(
+                  icon: Icon(_buscando ? Icons.close : Icons.search),
+                  tooltip: _buscando ? 'Cerrar búsqueda' : 'Buscar en el canal',
+                  onPressed: () => _buscando ? _cerrarBusqueda() : setState(() => _buscando = true),
                 ),
               ],
             ),
@@ -338,7 +412,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: ChoiceChip(
                       label: Text(_kCanalLabel[c] ?? c),
                       selected: activo,
-                      onSelected: (_) => setState(() => _canalActivo = c),
+                      onSelected: (_) => setState(() {
+                        _canalActivo = c;
+                        _cerrarBusqueda();
+                      }),
                       selectedColor: primary,
                       backgroundColor: Colors.grey.shade100,
                       labelStyle: TextStyle(
@@ -403,6 +480,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               onTapCitado: msg.respuestaA != null
                                   ? () => _irAMensaje(msg.respuestaA.toString())
                                   : null,
+                              resaltado: _coincidenciaActual >= 0 && _coincidencias[_coincidenciaActual] == msg.id,
                             ),
                           ),
                         ],
@@ -643,6 +721,7 @@ class _BurbujaMensaje extends StatelessWidget {
   final Color colorUsuario;
   final ChatMessage? mensajeCitado;
   final VoidCallback? onTapCitado;
+  final bool resaltado;
 
   const _BurbujaMensaje({
     required this.mensaje,
@@ -653,6 +732,7 @@ class _BurbujaMensaje extends StatelessWidget {
     required this.colorUsuario,
     this.mensajeCitado,
     this.onTapCitado,
+    this.resaltado = false,
   });
 
   String _hora(DateTime fecha) {
@@ -740,7 +820,9 @@ class _BurbujaMensaje extends StatelessWidget {
                       bottomLeft: Radius.circular(esMio ? 18 : 4),
                       bottomRight: Radius.circular(esMio ? 4 : 18),
                     ),
-                    border: borrado ? Border.all(color: Colors.red.withValues(alpha: 0.3)) : null,
+                    border: borrado
+                        ? Border.all(color: Colors.red.withValues(alpha: 0.3))
+                        : (resaltado ? Border.all(color: Colors.amber, width: 2) : null),
                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))],
                   ),
                   child: Column(
