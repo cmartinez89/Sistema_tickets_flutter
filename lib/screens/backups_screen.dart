@@ -143,7 +143,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.blueGrey.shade800,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     Text(

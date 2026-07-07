@@ -154,7 +154,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                   Text('${eq.marca} - ${eq.modelo}', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 4),
                   if (eq.folioActivo != null)
-                    Text('Activo: ${eq.folioActivo}', style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
+                    Text('Activo: ${eq.folioActivo}', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontSize: 12)),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: _empleadoCtrl,
@@ -467,7 +467,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('Control de Activos y Cartas Responsivas',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade800)),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       Text('${lista.length} de ${widget.inventario.length} equipos',
                           style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
@@ -640,7 +640,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                         children: [
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
-                                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, foregroundColor: Colors.blueGrey.shade800),
+                                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant),
                                             onPressed: () => abrirDialogoNuevoEquipo(
                                               context: context,
                                               api: widget.api,

@@ -247,12 +247,12 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     Text(
                       'Depto: ${t.departamento}  •  Prioridad: ${t.prioridad}  •  Creado: ${_formatFecha(t.fecha)}',
                       style:
-                          const TextStyle(color: Colors.blueGrey, fontSize: 12),
+                          TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontSize: 12),
                     ),
                     if (t.categoria != null)
                       Text('Categoría: ${t.categoria}',
-                          style: const TextStyle(
-                              color: Colors.blueGrey, fontSize: 12)),
+                          style: TextStyle(
+                              color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontSize: 12)),
                     const SizedBox(height: 6),
                     Text(t.descripcion),
                     if (t.estado == 'Escalado' &&
@@ -1038,10 +1038,10 @@ class _TicketsScreenState extends State<TicketsScreen> {
               children: [
                 Text(
                   'Consola Soporte (${lista.length})',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.blueGrey),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 ElevatedButton.icon(
                   onPressed: _abrirDialogoNuevo,
