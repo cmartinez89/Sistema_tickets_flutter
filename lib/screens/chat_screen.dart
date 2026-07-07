@@ -62,13 +62,13 @@ class _SeparadorFecha extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(8),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 3, offset: const Offset(0, 1))],
           ),
           child: Text(
             _etiquetaFecha(fecha),
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       ),
@@ -334,14 +334,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final mensajes = _mensajesDelCanal;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: Column(
         children: [
           // Header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             child: Row(
               children: [
                 if (widget.onVolver != null)
@@ -375,7 +375,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           children: [
                             const Text('Chat Interno TI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                             Text(_kCanalLabel[_canalActivo] ?? _canalActivo,
-                                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                           ],
                         ),
                 ),
@@ -384,7 +384,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     padding: const EdgeInsets.only(right: 4),
                     child: Text(
                       '${_coincidencias.length - _coincidenciaActual}/${_coincidencias.length}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ),
                 if (_buscando) ...[
@@ -401,7 +401,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           if (widget.canales.length > 1)
             Container(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -417,9 +417,9 @@ class _ChatScreenState extends State<ChatScreen> {
                         _cerrarBusqueda();
                       }),
                       selectedColor: primary,
-                      backgroundColor: Colors.grey.shade100,
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       labelStyle: TextStyle(
-                        color: activo ? Colors.white : Colors.black87,
+                        color: activo ? Colors.white : Theme.of(context).colorScheme.onSurface,
                         fontWeight: FontWeight.w600,
                         fontSize: 12,
                       ),
@@ -437,9 +437,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.chat_bubble_outline_rounded, size: 48, color: Colors.grey.shade300),
+                        Icon(Icons.chat_bubble_outline_rounded, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(height: 12),
-                        Text('Sé el primero en escribir', style: TextStyle(color: Colors.grey.shade400)),
+                        Text('Sé el primero en escribir', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   )
@@ -494,8 +494,8 @@ class _ChatScreenState extends State<ChatScreen> {
             Container(
               constraints: const BoxConstraints(maxHeight: 220),
               decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                color: Theme.of(context).colorScheme.surface,
+                border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, -2))],
               ),
               child: ListView.builder(
@@ -512,7 +512,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       child: Text(u.inicial, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
                     ),
                     title: Text(u.nombreCompleto, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                    subtitle: Text('@${u.username}', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    subtitle: Text('@${u.username}', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     onTap: () => _seleccionarMencion(u),
                   );
                 },
@@ -522,7 +522,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Image preview strip
           if (_imagenSeleccionada != null)
             Container(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
                 children: [
@@ -537,8 +537,8 @@ class _ChatScreenState extends State<ChatScreen> {
                             if (bytes == null) {
                               return Container(
                                 width: 70, height: 70,
-                                color: Colors.grey.shade200,
-                                child: const Icon(Icons.image, color: Colors.grey),
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                child: Icon(Icons.image, color: Theme.of(context).colorScheme.onSurfaceVariant),
                               );
                             }
                             return Image.memory(bytes, width: 70, height: 70, fit: BoxFit.cover);
@@ -560,7 +560,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ],
                   ),
                   const SizedBox(width: 10),
-                  Text('Imagen lista para enviar', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text('Imagen lista para enviar', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             ),
@@ -602,7 +602,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Input
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, -2))],
             ),
             padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
@@ -616,9 +616,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     onSubmitted: (_) => _enviar(),
                     decoration: InputDecoration(
                       hintText: 'Escribe un mensaje...',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      hintStyle: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                       filled: true,
-                      fillColor: const Color(0xFFF0F2F5),
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
@@ -630,14 +630,14 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 6),
                 // Image button
                 Material(
-                  color: Colors.grey.shade100,
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   shape: const CircleBorder(),
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: _seleccionarImagen,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
-                      child: Icon(Icons.image_rounded, color: Colors.grey.shade600, size: 20),
+                      child: Icon(Icons.image_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
                     ),
                   ),
                 ),
@@ -689,7 +689,7 @@ class _TextoConMenciones extends StatelessWidget {
       if (m.start > last) {
         spans.add(TextSpan(
           text: texto.substring(last, m.start),
-          style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
+          style: TextStyle(color: esMio ? Colors.white : Theme.of(context).colorScheme.onSurface, fontSize: 14),
         ));
       }
       spans.add(TextSpan(
@@ -705,7 +705,7 @@ class _TextoConMenciones extends StatelessWidget {
     if (last < texto.length) {
       spans.add(TextSpan(
         text: texto.substring(last),
-        style: TextStyle(color: esMio ? Colors.white : Colors.black87, fontSize: 14),
+        style: TextStyle(color: esMio ? Colors.white : Theme.of(context).colorScheme.onSurface, fontSize: 14),
       ));
     }
     return RichText(text: TextSpan(children: spans));
@@ -756,18 +756,18 @@ class _BurbujaMensaje extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.grey.shade300),
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.block_rounded, size: 14, color: Colors.grey.shade400),
+                  Icon(Icons.block_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     'Este mensaje fue eliminado',
-                    style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontStyle: FontStyle.italic),
+                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic),
                   ),
                 ],
               ),
@@ -812,8 +812,8 @@ class _BurbujaMensaje extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
                     color: borrado
-                        ? (esMio ? colorPrimary.withValues(alpha: 0.5) : Colors.grey.shade200)
-                        : (esMio ? colorPrimary : Colors.white),
+                        ? (esMio ? colorPrimary.withValues(alpha: 0.5) : Theme.of(context).colorScheme.surfaceContainerHighest)
+                        : (esMio ? colorPrimary : Theme.of(context).colorScheme.surface),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
@@ -853,13 +853,13 @@ class _BurbujaMensaje extends StatelessWidget {
                                         mensajeCitado!.texto.isNotEmpty ? mensajeCitado!.texto : '📷 Imagen',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(fontSize: 11, color: esMio ? Colors.white.withValues(alpha: 0.85) : Colors.black87),
+                                        style: TextStyle(fontSize: 11, color: esMio ? Colors.white.withValues(alpha: 0.85) : Theme.of(context).colorScheme.onSurface),
                                       ),
                                     ],
                                   )
                                 : Text(
                                     'Mensaje original no disponible',
-                                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: esMio ? Colors.white.withValues(alpha: 0.7) : Colors.grey.shade500),
+                                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: esMio ? Colors.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.onSurfaceVariant),
                                   ),
                           ),
                         ),
@@ -908,7 +908,7 @@ class _BurbujaMensaje extends StatelessWidget {
                         _hora(mensaje.fecha),
                         style: TextStyle(
                           fontSize: 10,
-                          color: esMio ? Colors.white.withValues(alpha: 0.7) : Colors.grey.shade400,
+                          color: esMio ? Colors.white.withValues(alpha: 0.7) : Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
