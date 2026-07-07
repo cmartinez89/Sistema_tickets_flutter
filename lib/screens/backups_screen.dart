@@ -122,7 +122,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -146,9 +146,9 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                         color: Colors.blueGrey.shade800,
                       ),
                     ),
-                    const Text(
+                    Text(
                       'Presiona el ícono de nube para actualizar la fecha de respaldo.',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -244,7 +244,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                   }
 
                   Color obtenerTextoDias(int? dias) {
-                    if (dias == null) return Colors.black87;
+                    if (dias == null) return Theme.of(context).colorScheme.onSurface;
                     if (dias >= 15) return Colors.red.shade900;
                     if (dias >= 7) return Colors.amber.shade900;
                     return Colors.green.shade900;
@@ -258,9 +258,9 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.cloud_off_rounded, size: 48, color: Colors.grey.shade300),
+                            Icon(Icons.cloud_off_rounded, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             const SizedBox(height: 12),
-                            Text('Sin resultados', style: TextStyle(color: Colors.grey.shade400)),
+                            Text('Sin resultados', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                           ],
                         ),
                       );
@@ -295,7 +295,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
+                                        color: Theme.of(context).colorScheme.surfaceContainerHighest,
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(eq.ubicacion, style: const TextStyle(fontSize: 11)),
@@ -311,7 +311,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Text('Último Respaldo:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        Text('Último Respaldo:', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                         Row(
                                           children: [
                                             Text(_fmt(eq.ultimoRespaldo), style: const TextStyle(fontWeight: FontWeight.w500)),
@@ -337,7 +337,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                                     Column(
                                       crossAxisAlignment: CrossAxisAlignment.end,
                                       children: [
-                                        const Text('Días:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                        Text('Días:', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                         const SizedBox(height: 4),
                                         _badgeDias(dias, obtenerFondoDias(dias), obtenerTextoDias(dias)),
                                       ],
@@ -364,7 +364,7 @@ class _PantallaRespaldosState extends State<PantallaRespaldos> {
                             minWidth: constraints.maxWidth,
                           ),
                           child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(Colors.grey.shade200),
+                            headingRowColor: WidgetStateProperty.all(Theme.of(context).colorScheme.surfaceContainerHighest),
                             columnSpacing: 24,
                             columns: const [
                               DataColumn(label: Text('Ubicación', style: TextStyle(fontWeight: FontWeight.bold))),

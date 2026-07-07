@@ -292,12 +292,12 @@ class _TicketsScreenState extends State<TicketsScreen> {
                           ),
                         )
                       else if (cargandoAi)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Row(children: [
-                            SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                            SizedBox(width: 10),
-                            Text('Consultando IA...', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                            const SizedBox(width: 10),
+                            Text('Consultando IA...', style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                           ]),
                         )
                       else if (aiSugerencia != null)
@@ -370,7 +370,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                                 _formatDuracion(dur),
                                 style: TextStyle(
                                     fontSize: 11,
-                                    color: Colors.grey.shade600),
+                                    color: Theme.of(ctx).colorScheme.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -401,7 +401,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                         child: Text('Sin comentarios',
                             style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey.shade400)),
+                                color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                       )
                     else
                       ...comentarios.map((c) => Container(
@@ -434,7 +434,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                                           DateTime.now()),
                                       style: TextStyle(
                                           fontSize: 10,
-                                          color: Colors.grey.shade500),
+                                          color: Theme.of(ctx).colorScheme.onSurfaceVariant),
                                     ),
                                   ],
                                 ),
@@ -1156,8 +1156,8 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     style: const TextStyle(fontSize: 12),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: _desde != null ? Colors.blue.shade300 : Colors.grey.shade300),
-                    foregroundColor: _desde != null ? Colors.blue.shade700 : Colors.grey.shade600,
+                    side: BorderSide(color: _desde != null ? Colors.blue.shade300 : Theme.of(context).colorScheme.outlineVariant),
+                    foregroundColor: _desde != null ? Colors.blue.shade700 : Theme.of(context).colorScheme.onSurfaceVariant,
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   ),
@@ -1180,8 +1180,8 @@ class _TicketsScreenState extends State<TicketsScreen> {
                     style: const TextStyle(fontSize: 12),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: _hasta != null ? Colors.blue.shade300 : Colors.grey.shade300),
-                    foregroundColor: _hasta != null ? Colors.blue.shade700 : Colors.grey.shade600,
+                    side: BorderSide(color: _hasta != null ? Colors.blue.shade300 : Theme.of(context).colorScheme.outlineVariant),
+                    foregroundColor: _hasta != null ? Colors.blue.shade700 : Theme.of(context).colorScheme.onSurfaceVariant,
                     visualDensity: VisualDensity.compact,
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   ),
@@ -1210,11 +1210,11 @@ class _TicketsScreenState extends State<TicketsScreen> {
                         children: [
                           Icon(Icons.inbox_rounded,
                               size: 48,
-                              color: Colors.grey.shade300),
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
                           const SizedBox(height: 8),
                           Text('Sin tickets',
                               style: TextStyle(
-                                  color: Colors.grey.shade400)),
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         ],
                       ),
                     )

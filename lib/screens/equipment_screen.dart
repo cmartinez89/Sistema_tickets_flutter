@@ -151,7 +151,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${eq.marca} - ${eq.modelo}', style: const TextStyle(color: Colors.grey)),
+                  Text('${eq.marca} - ${eq.modelo}', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 4),
                   if (eq.folioActivo != null)
                     Text('Activo: ${eq.folioActivo}', style: const TextStyle(color: Colors.blueGrey, fontSize: 12)),
@@ -168,7 +168,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null,
                   ),
                   const SizedBox(height: 8),
-                  const Text('El folio de responsiva se generará automáticamente.', style: TextStyle(fontSize: 11, color: Colors.grey, fontStyle: FontStyle.italic)),
+                  Text('El folio de responsiva se generará automáticamente.', style: TextStyle(fontSize: 11, color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
                 ],
               ),
             ),
@@ -225,7 +225,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('${eq.marca} - ${eq.modelo}', style: const TextStyle(color: Colors.grey)),
+                  Text('${eq.marca} - ${eq.modelo}', style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 16),
                   TextFormField(
                     controller: precioCtrl,
@@ -250,7 +250,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                         fechaVenta != null
                             ? '${fechaVenta!.day.toString().padLeft(2, '0')}/${fechaVenta!.month.toString().padLeft(2, '0')}/${fechaVenta!.year}'
                             : 'Seleccionar fecha',
-                        style: TextStyle(color: fechaVenta != null ? Colors.black87 : Colors.grey),
+                        style: TextStyle(color: fechaVenta != null ? Theme.of(ctx).colorScheme.onSurface : Theme.of(ctx).colorScheme.onSurfaceVariant),
                       ),
                     ),
                   ),
@@ -453,7 +453,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     final uniqueAreas = widget.inventario.map((e) => e.area ?? e.ubicacion).where((a) => a.isNotEmpty).toSet().toList()..sort();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -469,7 +469,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       Text('Control de Activos y Cartas Responsivas',
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueGrey.shade800)),
                       Text('${lista.length} de ${widget.inventario.length} equipos',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -541,9 +541,9 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
             Expanded(
               child: lista.isEmpty
                   ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.devices_other_rounded, size: 48, color: Colors.grey.shade300),
+                      Icon(Icons.devices_other_rounded, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                       const SizedBox(height: 8),
-                      Text('Sin resultados', style: TextStyle(color: Colors.grey.shade400)),
+                      Text('Sin resultados', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ]))
                   : ListView.builder(
                       itemCount: lista.length,
@@ -600,7 +600,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                             style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                                     ] else
                                       Text('Disponible (Resguardo: ${eq.empleadoAsignado ?? "Sistemas"})',
-                                          style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
                                     const Divider(),
                                     if (eq.area != null && eq.area!.isNotEmpty)
                                       Text('Área: ${eq.area}', style: const TextStyle(fontSize: 12)),
@@ -640,7 +640,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                         children: [
                                           ElevatedButton.icon(
                                             style: ElevatedButton.styleFrom(
-                                                backgroundColor: Colors.grey.shade200, foregroundColor: Colors.blueGrey.shade800),
+                                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, foregroundColor: Colors.blueGrey.shade800),
                                             onPressed: () => abrirDialogoNuevoEquipo(
                                               context: context,
                                               api: widget.api,
@@ -687,7 +687,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                           if (!vendido)
                                             ElevatedButton.icon(
                                               style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.grey.shade100, foregroundColor: Colors.grey.shade700),
+                                                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant),
                                               onPressed: () => _darDeBajaHardware(eq),
                                               icon: const Icon(Icons.remove_circle_outline_rounded, size: 16),
                                               label: const Text('Dar de baja', style: TextStyle(fontSize: 12)),
@@ -720,7 +720,7 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButtonHideUnderline(
