@@ -128,9 +128,32 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _imagenSeleccionada;
   List<Usuario> _sugerencias = [];
   late String _canalActivo;
+  ChatMessage? _respondiendoA;
+  final Map<String, GlobalKey> _mensajeKeys = {};
 
   List<ChatMessage> get _mensajesDelCanal =>
       widget.mensajes.where((m) => m.canal == _canalActivo).toList();
+
+  GlobalKey _keyPara(String id) => _mensajeKeys.putIfAbsent(id, () => GlobalKey());
+
+  ChatMessage? _buscarMensajePorId(String? id) {
+    if (id == null) return null;
+    for (final m in widget.mensajes) {
+      if (m.id == id) return m;
+    }
+    return null;
+  }
+
+  void _irAMensaje(String id) {
+    final ctx = _mensajeKeys[id]?.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 300), alignment: 0.5);
+    }
+  }
+
+  void _iniciarRespuesta(ChatMessage msg) {
+    setState(() => _respondiendoA = msg);
+  }
 
   @override
   void initState() {
@@ -199,8 +222,12 @@ class _ChatScreenState extends State<ChatScreen> {
     if ((texto.isEmpty && _imagenSeleccionada == null) || _enviando) return;
     setState(() => _enviando = true);
     final imagenEnviar = _imagenSeleccionada;
+    final respuestaAEnviar = _respondiendoA != null ? int.tryParse(_respondiendoA!.id) : null;
     _inputCtrl.clear();
-    setState(() => _imagenSeleccionada = null);
+    setState(() {
+      _imagenSeleccionada = null;
+      _respondiendoA = null;
+    });
     try {
       await widget.api.enviarMensaje(
         widget.session.username,
@@ -208,6 +235,7 @@ class _ChatScreenState extends State<ChatScreen> {
         texto,
         canal: _canalActivo,
         imagen: imagenEnviar,
+        respuestaA: respuestaAEnviar,
       );
     } catch (e) {
       if (mounted) {
@@ -350,13 +378,20 @@ class _ChatScreenState extends State<ChatScreen> {
                       final nuevoDia = i == 0 || !_mismoDia(mensajes[i - 1].fecha, msg.fecha);
                       final mostrarNombre = !esMio &&
                           (nuevoDia || mensajes[i - 1].deUsuario != msg.deUsuario);
+                      double dragDx = 0;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (nuevoDia) _SeparadorFecha(fecha: msg.fecha),
                           GestureDetector(
+                            key: _keyPara(msg.id),
                             onLongPress: _puedeBorar(msg) ? () => _confirmarBorrado(msg) : null,
+                            onHorizontalDragUpdate: (d) => dragDx += d.delta.dx,
+                            onHorizontalDragEnd: (_) {
+                              if (dragDx.abs() > 48) _iniciarRespuesta(msg);
+                              dragDx = 0;
+                            },
                             child: _BurbujaMensaje(
                               mensaje: msg,
                               esMio: esMio,
@@ -364,6 +399,10 @@ class _ChatScreenState extends State<ChatScreen> {
                               mostrarNombre: mostrarNombre,
                               colorPrimary: primary,
                               colorUsuario: _colorDeUsuario(msg.deUsuario),
+                              mensajeCitado: _buscarMensajePorId(msg.respuestaA?.toString()),
+                              onTapCitado: msg.respuestaA != null
+                                  ? () => _irAMensaje(msg.respuestaA.toString())
+                                  : null,
                             ),
                           ),
                         ],
@@ -444,6 +483,40 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   const SizedBox(width: 10),
                   Text('Imagen lista para enviar', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+
+          // Reply preview bar
+          if (_respondiendoA != null)
+            Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+              child: Row(
+                children: [
+                  Container(width: 3, height: 34, color: primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _respondiendoA!.deUsuario == widget.session.username ? 'Tú' : _respondiendoA!.nombreCompleto,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primary),
+                        ),
+                        Text(
+                          _respondiendoA!.texto.isNotEmpty ? _respondiendoA!.texto : '📷 Imagen',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 18),
+                    onPressed: () => setState(() => _respondiendoA = null),
+                  ),
                 ],
               ),
             ),
@@ -568,6 +641,8 @@ class _BurbujaMensaje extends StatelessWidget {
   final bool mostrarNombre;
   final Color colorPrimary;
   final Color colorUsuario;
+  final ChatMessage? mensajeCitado;
+  final VoidCallback? onTapCitado;
 
   const _BurbujaMensaje({
     required this.mensaje,
@@ -576,6 +651,8 @@ class _BurbujaMensaje extends StatelessWidget {
     required this.mostrarNombre,
     required this.colorPrimary,
     required this.colorUsuario,
+    this.mensajeCitado,
+    this.onTapCitado,
   });
 
   String _hora(DateTime fecha) {
@@ -669,6 +746,41 @@ class _BurbujaMensaje extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      // Citación de mensaje respondido
+                      if (mensaje.respuestaA != null)
+                        GestureDetector(
+                          onTap: onTapCitado,
+                          child: Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: (esMio ? Colors.white : colorPrimary).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border(left: BorderSide(color: esMio ? Colors.white : colorPrimary, width: 3)),
+                            ),
+                            child: mensajeCitado != null
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        mensajeCitado!.nombreCompleto,
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: esMio ? Colors.white : colorPrimary),
+                                      ),
+                                      Text(
+                                        mensajeCitado!.texto.isNotEmpty ? mensajeCitado!.texto : '📷 Imagen',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 11, color: esMio ? Colors.white.withValues(alpha: 0.85) : Colors.black87),
+                                      ),
+                                    ],
+                                  )
+                                : Text(
+                                    'Mensaje original no disponible',
+                                    style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: esMio ? Colors.white.withValues(alpha: 0.7) : Colors.grey.shade500),
+                                  ),
+                          ),
+                        ),
                       // Admin badge when showing deleted message
                       if (borrado && esAdmin)
                         Padding(
