@@ -194,8 +194,9 @@ class _CatalogoManagerState extends State<_CatalogoManager> with AutomaticKeepAl
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: colorScheme.surfaceContainerLow,
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -218,8 +219,8 @@ class _CatalogoManagerState extends State<_CatalogoManager> with AutomaticKeepAl
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.titulo, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.grey.shade800)),
-                      Text('${_items.length} registros', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                      Text(widget.titulo, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: colorScheme.onSurface)),
+                      Text('${_items.length} registros', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
                     ],
                   ),
                 ]),
@@ -245,6 +246,7 @@ class _CatalogoManagerState extends State<_CatalogoManager> with AutomaticKeepAl
   }
 
   Widget _buildBody() {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_cargando) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -255,7 +257,7 @@ class _CatalogoManagerState extends State<_CatalogoManager> with AutomaticKeepAl
           const SizedBox(height: 12),
           Text('Error al cargar', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text(_error!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          Text(_error!, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
           const SizedBox(height: 12),
           ElevatedButton.icon(
             onPressed: _cargar,
@@ -268,11 +270,11 @@ class _CatalogoManagerState extends State<_CatalogoManager> with AutomaticKeepAl
     if (_items.isEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(widget.icono, size: 48, color: Colors.grey.shade300),
+          Icon(widget.icono, size: 48, color: colorScheme.onSurfaceVariant),
           const SizedBox(height: 12),
-          Text('No hay registros.', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+          Text('No hay registros.', style: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
           const SizedBox(height: 4),
-          Text('Presiona Agregar para añadir el primero.', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+          Text('Presiona Agregar para añadir el primero.', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
         ]),
       );
     }

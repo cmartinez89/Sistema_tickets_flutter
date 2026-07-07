@@ -64,6 +64,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   // ── Bar chart widget ────────────────────────────────────────────────────────
 
   Widget _barraHorizontal(String label, int value, int maxValue, Color color) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -77,7 +78,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
               borderRadius: BorderRadius.circular(4),
               child: Stack(
                 children: [
-                  Container(height: 20, color: Colors.grey.shade100),
+                  Container(height: 20, color: colorScheme.surfaceContainerHighest),
                   FractionallySizedBox(
                     widthFactor: maxValue > 0 ? (value / maxValue).clamp(0.0, 1.0) : 0,
                     child: Container(
@@ -109,6 +110,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   // ── Section card ────────────────────────────────────────────────────────────
 
   Widget _seccion(String titulo, IconData icono, Color color, Widget child) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       elevation: 2,
       margin: const EdgeInsets.only(bottom: 16),
@@ -128,7 +130,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                 child: Icon(icono, color: color, size: 16),
               ),
               const SizedBox(width: 10),
-              Text(titulo, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+              Text(titulo, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
             ]),
             const SizedBox(height: 12),
             child,
@@ -141,6 +143,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   // ── Summary card ────────────────────────────────────────────────────────────
 
   Widget _cardResumen(String titulo, String valor, String subtitulo, Color color, IconData icono) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -166,7 +169,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                       children: [
                         Text(titulo, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
                         Text(valor, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color)),
-                        Text(subtitulo, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                        Text(subtitulo, style: TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   ),
@@ -184,7 +187,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.primary,
         title: const Text('Reportes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
@@ -201,13 +204,14 @@ class _ReportesScreenState extends State<ReportesScreen> {
   }
 
   Widget _buildBody() {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_cargando) {
-      return const Center(child: Column(
+      return Center(child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Cargando reportes...', style: TextStyle(color: Colors.grey)),
+          const CircularProgressIndicator(),
+          const SizedBox(height: 16),
+          Text('Cargando reportes...', style: TextStyle(color: colorScheme.onSurfaceVariant)),
         ],
       ));
     }
@@ -219,7 +223,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
           const SizedBox(height: 12),
           const Text('Error al cargar reportes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 4),
-          Text(_error!, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          Text(_error!, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _cargar,
@@ -269,7 +273,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Tickets por Estado ────────────────────────────────────────────
           _seccion('Tickets por Estado', Icons.pie_chart_rounded, Colors.indigo, () {
-            if (porEstado.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (porEstado.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final max = porEstado.values.fold(0, (a, b) => a > b ? a : b);
             return Column(
               children: porEstado.entries.map((e) => _barraHorizontal(e.key, e.value, max, _estadoColor(e.key))).toList(),
@@ -278,7 +282,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Tickets por Prioridad ─────────────────────────────────────────
           _seccion('Tickets por Prioridad', Icons.priority_high_rounded, Colors.deepOrange, () {
-            if (porPrioridad.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (porPrioridad.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final max = porPrioridad.values.fold(0, (a, b) => a > b ? a : b);
             return Column(
               children: porPrioridad.entries.map((e) => _barraHorizontal(e.key, e.value, max, _prioColor(e.key))).toList(),
@@ -287,7 +291,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Tickets por Técnico ───────────────────────────────────────────
           _seccion('Tickets por Técnico', Icons.person_rounded, Colors.purple, () {
-            if (porTecnico.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (porTecnico.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final top = porTecnico.take(8).toList();
             final max = top.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
             return Column(
@@ -302,7 +306,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Tickets por Área ──────────────────────────────────────────────
           _seccion('Tickets por Área', Icons.business_rounded, const Color(0xFF1A2B72), () {
-            if (porArea.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (porArea.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final top = porArea.take(8).toList();
             final max = top.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
             return Column(
@@ -317,7 +321,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Tickets por Categoría ─────────────────────────────────────────
           _seccion('Tickets por Categoría', Icons.category_rounded, Colors.blueGrey, () {
-            if (porCategoria.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (porCategoria.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final top = porCategoria.take(8).toList();
             final max = top.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
             return Column(
@@ -332,7 +336,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Tickets por Mes ───────────────────────────────────────────────
           _seccion('Tickets por Mes (últimos 6)', Icons.calendar_month_rounded, Colors.blue, () {
-            if (porMes.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (porMes.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final max = porMes.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
             return SizedBox(
               height: 120,
@@ -360,7 +364,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
                           const SizedBox(height: 4),
                           Text(
                             e['mes']?.toString().substring(5) ?? '',
-                            style: const TextStyle(fontSize: 9, color: Colors.grey),
+                            style: TextStyle(fontSize: 9, color: colorScheme.onSurfaceVariant),
                           ),
                         ],
                       ),
@@ -373,7 +377,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Equipos por Tipo ──────────────────────────────────────────────
           _seccion('Equipos por Tipo', Icons.computer_rounded, const Color(0xFF1A2B72), () {
-            if (eqTipo.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (eqTipo.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             final max = eqTipo.fold(0, (a, b) => a > _int(b['total']) ? a : _int(b['total']));
             return Column(
               children: eqTipo.map((e) => _barraHorizontal(
@@ -387,7 +391,7 @@ class _ReportesScreenState extends State<ReportesScreen> {
 
           // ── Equipos por Estatus ───────────────────────────────────────────
           _seccion('Equipos por Estatus', Icons.inventory_2_rounded, Colors.indigo, () {
-            if (eqEstatus.isEmpty) return const Text('Sin datos', style: TextStyle(color: Colors.grey));
+            if (eqEstatus.isEmpty) return Text('Sin datos', style: TextStyle(color: colorScheme.onSurfaceVariant));
             Color estatusColor(String s) => switch (s) {
               'Asignado'   => Colors.indigo.shade600,
               'Disponible' => Colors.blue.shade700,

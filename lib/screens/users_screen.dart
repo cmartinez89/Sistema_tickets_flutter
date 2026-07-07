@@ -197,20 +197,21 @@ class _UsersScreenState extends State<UsersScreen> {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      color: const Color(0xFFF5F7FA),
+      color: colorScheme.surfaceContainerLow,
       child: Column(
         children: [
           // Header
           Container(
-            color: Colors.white,
+            color: colorScheme.surface,
             padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
             child: Row(
               children: [
                 Text(
                   'Gestión de Usuarios',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: colorScheme.onSurface),
                 ),
                 const Spacer(),
                 ElevatedButton.icon(
@@ -235,9 +236,9 @@ class _UsersScreenState extends State<UsersScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.group_off_rounded, size: 48, color: Colors.grey.shade300),
+                        Icon(Icons.group_off_rounded, size: 48, color: colorScheme.onSurfaceVariant),
                         const SizedBox(height: 12),
-                        Text('No hay usuarios registrados', style: TextStyle(color: Colors.grey.shade500)),
+                        Text('No hay usuarios registrados', style: TextStyle(color: colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   )
@@ -248,7 +249,7 @@ class _UsersScreenState extends State<UsersScreen> {
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
                           '${widget.usuarios.length} usuario${widget.usuarios.length != 1 ? 's' : ''} registrados',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
                         ),
                       ),
                       ...widget.usuarios.map((u) => _TarjetaUsuario(
@@ -284,6 +285,7 @@ class _TarjetaUsuario extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final esAdmin = usuario.rol == 'Admin';
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -330,7 +332,7 @@ class _TarjetaUsuario extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '@${usuario.username}  ·  ${usuario.email}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),
@@ -339,7 +341,7 @@ class _TarjetaUsuario extends StatelessWidget {
               icon: const Icon(Icons.edit_rounded, size: 20),
               tooltip: 'Editar',
               onPressed: onEditar,
-              color: Colors.grey.shade600,
+              color: colorScheme.onSurfaceVariant,
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline_rounded, size: 20),

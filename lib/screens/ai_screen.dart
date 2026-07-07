@@ -120,7 +120,7 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
           child: TabBar(
             controller: _tabCtrl,
             labelColor: primary,
-            unselectedLabelColor: Colors.grey,
+            unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
             indicatorColor: primary,
             tabs: const [
               Tab(icon: Icon(Icons.smart_toy_rounded), text: 'Asistente IA'),
@@ -204,21 +204,22 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
   }
 
   Widget _buildAsistenteVacio() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.smart_toy_rounded, size: 72, color: Colors.grey.shade300),
+            Icon(Icons.smart_toy_rounded, size: 72, color: colorScheme.onSurfaceVariant),
             const SizedBox(height: 16),
             Text('Asistente IA de Soporte',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant)),
             const SizedBox(height: 8),
             Text(
               'Pregunta sobre tickets, equipos, estadísticas\no cualquier aspecto del sistema.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+              style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 28),
             Wrap(
@@ -241,7 +242,8 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
   }
 
   Widget _buildBurbuja(_ChatMsg msg) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final colorScheme = Theme.of(context).colorScheme;
+    final primary = colorScheme.primary;
     final isUser = msg.esUsuario;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -252,7 +254,7 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
         decoration: BoxDecoration(
           color: isUser
               ? primary
-              : msg.esError ? Colors.red.shade50 : Colors.grey.shade100,
+              : msg.esError ? Colors.red.shade50 : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -266,7 +268,7 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
           style: TextStyle(
             color: isUser
                 ? Colors.white
-                : msg.esError ? Colors.red.shade700 : Colors.black87,
+                : msg.esError ? Colors.red.shade700 : colorScheme.onSurface,
             fontSize: 13.5,
           ),
         ),
@@ -275,17 +277,18 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
   }
 
   Widget _buildAnomalias() {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_cargandoAnomalias) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Analizando datos del sistema...'),
-            SizedBox(height: 4),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Analizando datos del sistema...'),
+            const SizedBox(height: 4),
             Text('Esto puede tardar unos segundos',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
+                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
           ],
         ),
       );
@@ -322,15 +325,15 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.radar_rounded, size: 72, color: Colors.grey.shade300),
+              Icon(Icons.radar_rounded, size: 72, color: colorScheme.onSurfaceVariant),
               const SizedBox(height: 16),
               Text('Detección de Anomalías',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant)),
               const SizedBox(height: 8),
               Text(
                 'Claude analizará tickets, equipos y tiempos de resolución\npara identificar patrones y situaciones de riesgo.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
               ),
               const SizedBox(height: 28),
               ElevatedButton.icon(
@@ -413,6 +416,7 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
   }
 
   Widget _buildAnomaliaCard(Map<String, dynamic> a) {
+    final colorScheme = Theme.of(context).colorScheme;
     final sev = a['severidad'] as String? ?? 'baja';
     final Color sevColor;
     final Color sevBg;
@@ -474,9 +478,9 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: colorScheme.outlineVariant),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,7 +489,7 @@ class _AiScreenState extends State<AiScreen> with SingleTickerProviderStateMixin
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(a['recomendacion'] as String,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                          style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
                     ),
                   ],
                 ),
