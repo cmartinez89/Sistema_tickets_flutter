@@ -22,6 +22,7 @@ import 'ai_screen.dart';
 import 'login_screen.dart';
 import 'proyectos_screen.dart';
 import 'tareas_screen.dart';
+import '../main.dart' show themeController;
 
 const String kWsBaseUrl = 'wss://soporte.beta.com.mx/ws';
 
@@ -256,6 +257,38 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
   }
 
+  void _mostrarDialogoApariencia() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AnimatedBuilder(
+        animation: themeController,
+        builder: (ctx, _) => SimpleDialog(
+          title: const Text('Apariencia'),
+          children: [
+            RadioListTile<ThemeMode>(
+              title: const Text('Claro'),
+              value: ThemeMode.light,
+              groupValue: themeController.mode,
+              onChanged: (v) => themeController.cambiar(v!),
+            ),
+            RadioListTile<ThemeMode>(
+              title: const Text('Oscuro'),
+              value: ThemeMode.dark,
+              groupValue: themeController.mode,
+              onChanged: (v) => themeController.cambiar(v!),
+            ),
+            RadioListTile<ThemeMode>(
+              title: const Text('Igual que el sistema'),
+              value: ThemeMode.system,
+              groupValue: themeController.mode,
+              onChanged: (v) => themeController.cambiar(v!),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -369,6 +402,16 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
               // ── Chat ───────────────────────────────────────────────
               const Divider(indent: 16, endIndent: 16),
               _itemChat(),
+              // ── Apariencia ───────────────────────────────────────────
+              const Divider(indent: 16, endIndent: 16),
+              ListTile(
+                leading: const Icon(Icons.dark_mode_rounded),
+                title: const Text('Apariencia'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _mostrarDialogoApariencia();
+                },
+              ),
               // ── Administración ───────────────────────────────────────
               if (_esAdmin) ...[
                 const Divider(indent: 16, endIndent: 16),
