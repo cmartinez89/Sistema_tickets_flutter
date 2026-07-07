@@ -313,6 +313,22 @@ class EquipoCreateRequest(BaseModel):
     area: Optional[str] = None
     macAddress: Optional[str] = None
 
+class EquipoUpdateRequest(BaseModel):
+    tipo: str
+    marca: str
+    modelo: str
+    noSerie: str
+    accesorios: str
+    anoAdquisicion: int
+    valorAdquisicion: float
+    specifications: str
+    ubicacion: str = 'Beta'
+    anydesk: str = ''
+    rustdesk: str = ''
+    comentarios: str = ''
+    area: Optional[str] = None
+    macAddress: Optional[str] = None
+
 class EquipoAsignarRequest(BaseModel):
     empleadoAsignado: str
     rolEmpleado: str
@@ -634,6 +650,29 @@ async def create_equipo(req: EquipoCreateRequest, current_user: dict = Depends(g
     finally:
         connection.close()
     await manager.broadcast({"tipo": "equipos", "accion": "nuevo"})
+    return _build_equipo(e)
+
+@app.put("/equipos/{equipo_id}")
+async def update_equipo(equipo_id: str, req: EquipoUpdateRequest, current_user: dict = Depends(get_current_user)):
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """UPDATE equipos SET tipo = %s, marca = %s, modelo = %s, no_serie = %s,
+                   accesorios = %s, ano_adquisicion = %s, valor_adquisicion = %s,
+                   specifications = %s, ubicacion = %s, anydesk = %s, rustdesk = %s,
+                   comentarios = %s, area = %s, mac_address = %s WHERE id = %s""",
+                (req.tipo, req.marca, req.modelo, req.noSerie, req.accesorios,
+                 req.anoAdquisicion, req.valorAdquisicion, req.specifications,
+                 req.ubicacion, req.anydesk, req.rustdesk, req.comentarios,
+                 req.area, req.macAddress, equipo_id)
+            )
+            connection.commit()
+            cursor.execute(EQUIPO_SELECT + " WHERE id = %s", (equipo_id,))
+            e = cursor.fetchone()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "equipos", "accion": "editado"})
     return _build_equipo(e)
 
 @app.put("/equipos/{equipo_id}/assign")
