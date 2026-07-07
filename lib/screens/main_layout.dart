@@ -301,7 +301,7 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         },
       ),
       if (_esAdmin) ...[
-        UsersScreen(usuarios: _usuarios, api: _api, onRefresh: _cargarUsuarios),
+        UsersScreen(usuarios: _usuarios, api: _api, session: widget.session, onRefresh: _cargarUsuarios),
         AdminScreen(api: _api),
         ReportesScreen(api: _api),
         AiScreen(api: _api, session: widget.session),

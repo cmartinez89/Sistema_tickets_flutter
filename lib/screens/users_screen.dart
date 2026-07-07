@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import '../models/session_model.dart';
 import '../models/usuario_model.dart';
 import '../services/api_service.dart';
 
 class UsersScreen extends StatefulWidget {
   final List<Usuario> usuarios;
   final ApiService api;
+  final Session session;
   final VoidCallback onRefresh;
 
   const UsersScreen({
     super.key,
     required this.usuarios,
     required this.api,
+    required this.session,
     required this.onRefresh,
   });
 
@@ -51,13 +54,10 @@ class _UsersScreenState extends State<UsersScreen> {
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: usernameCtrl,
-                    enabled: editar == null,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Nombre de usuario',
-                      border: const OutlineInputBorder(),
-                      helperText: editar == null ? 'Ej: jperez (sin espacios, minúsculas)' : null,
-                      filled: editar != null,
-                      fillColor: editar != null ? Colors.grey.shade100 : null,
+                      border: OutlineInputBorder(),
+                      helperText: 'Ej: jperez (sin espacios, minúsculas)',
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Requerido';
@@ -114,23 +114,31 @@ class _UsersScreenState extends State<UsersScreen> {
                   : () async {
                       if (!formKey.currentState!.validate()) return;
                       setLocal(() => guardando = true);
+                      final nuevoUsername = usernameCtrl.text.trim().toLowerCase();
                       try {
                         if (editar == null) {
                           await widget.api.crearUsuario(
-                            username: usernameCtrl.text.trim().toLowerCase(),
+                            username: nuevoUsername,
                             email: emailCtrl.text.trim().toLowerCase(),
                             nombreCompleto: nombreCtrl.text.trim(),
                             rol: rol,
                             password: passCtrl.text.trim(),
                           );
                         } else {
+                          final esAutoRename = nuevoUsername != editar.username && editar.username == widget.session.username;
                           await widget.api.actualizarUsuario(
                             username: editar.username,
                             nombreCompleto: nombreCtrl.text.trim(),
                             email: emailCtrl.text.trim().toLowerCase(),
                             rol: rol,
                             password: passCtrl.text.trim().isEmpty ? null : passCtrl.text.trim(),
+                            nuevoUsername: nuevoUsername != editar.username ? nuevoUsername : null,
                           );
+                          if (esAutoRename && ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('Cambiaste tu propio nombre de usuario: cierra sesión y vuelve a entrar con el nuevo.'), duration: Duration(seconds: 5)),
+                            );
+                          }
                         }
                         if (ctx.mounted) Navigator.pop(ctx);
                         widget.onRefresh();
