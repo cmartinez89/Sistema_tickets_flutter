@@ -114,9 +114,9 @@ class _ProyectosScreenState extends State<ProyectosScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+            Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.grey)),
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 12),
             FilledButton.icon(onPressed: _cargar, icon: const Icon(Icons.refresh), label: const Text('Reintentar')),
           ],
@@ -125,7 +125,7 @@ class _ProyectosScreenState extends State<ProyectosScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F8),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       floatingActionButton: _puedeEditar
           ? FloatingActionButton.extended(
               onPressed: () => _abrirDialogo(),
@@ -138,9 +138,9 @@ class _ProyectosScreenState extends State<ProyectosScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
+                  Icon(Icons.folder_open, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 12),
-                  Text('Sin proyectos', style: TextStyle(fontSize: 18, color: Colors.grey[600])),
+                  Text('Sin proyectos', style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   if (_puedeEditar) ...[
                     const SizedBox(height: 8),
                     TextButton(onPressed: () => _abrirDialogo(), child: const Text('Crear el primero')),
@@ -248,16 +248,16 @@ class _TarjetaProyecto extends StatelessWidget {
                 Text(proyecto.descripcion,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+                    style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.calendar_today, size: 14, color: Colors.grey[500]),
+                  Icon(Icons.calendar_today, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 4),
                   Text(
                     '${_fmtDate(proyecto.fechaInicio)} → ${_fmtDate(proyecto.fechaFin)}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                   const Spacer(),
                   if (proyecto.estado != 'terminado')
@@ -271,7 +271,7 @@ class _TarjetaProyecto extends StatelessWidget {
                             ? Colors.red
                             : diasRestantes < 7
                                 ? Colors.orange
-                                : Colors.grey[600],
+                                : Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: diasRestantes < 0 ? FontWeight.bold : FontWeight.normal,
                       ),
                     ),
@@ -281,10 +281,10 @@ class _TarjetaProyecto extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Icon(Icons.person_outline, size: 14, color: Colors.grey[500]),
+                    Icon(Icons.person_outline, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     const SizedBox(width: 4),
                     Text(proyecto.responsableNombre!,
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ],
                 ),
               ],
@@ -297,7 +297,7 @@ class _TarjetaProyecto extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: progreso,
                         minHeight: 6,
-                        backgroundColor: Colors.grey[200],
+                        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                         color: progreso >= 1.0 ? Colors.green : const Color(0xFF1A2B72),
                       ),
                     ),
@@ -305,7 +305,7 @@ class _TarjetaProyecto extends StatelessWidget {
                   const SizedBox(width: 8),
                   Text(
                     '${proyecto.tareasHecho}/${proyecto.tareasTotal} tareas',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   ),
                 ],
               ),

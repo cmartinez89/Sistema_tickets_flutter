@@ -171,7 +171,7 @@ class _ProyectoDetalleScreenState extends State<ProyectoDetalleScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F8),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A2B72),
         iconTheme: const IconThemeData(color: Colors.white),
@@ -285,7 +285,7 @@ class _FiltrosKanban extends StatelessWidget {
     final hayFiltros = asignadoFiltro != null || prioridadFiltro != null || busquedaCtrl.text.isNotEmpty;
 
     return Container(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -374,15 +374,16 @@ class _FiltroChipTarea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: activo ? const Color(0xFF1A2B72) : Colors.grey[100],
+          color: activo ? const Color(0xFF1A2B72) : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: activo ? const Color(0xFF1A2B72) : Colors.grey[300]!),
+          border: Border.all(color: activo ? const Color(0xFF1A2B72) : cs.outlineVariant),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -390,10 +391,10 @@ class _FiltroChipTarea extends StatelessWidget {
             Text(label,
                 style: TextStyle(
                     fontSize: 12,
-                    color: activo ? Colors.white : Colors.grey[700],
+                    color: activo ? Colors.white : cs.onSurfaceVariant,
                     fontWeight: activo ? FontWeight.bold : FontWeight.normal)),
             const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, size: 16, color: activo ? Colors.white : Colors.grey[600]),
+            Icon(Icons.arrow_drop_down, size: 16, color: activo ? Colors.white : cs.onSurfaceVariant),
           ],
         ),
       ),
@@ -465,6 +466,8 @@ class _KanbanColumnaState extends State<_KanbanColumna> {
   @override
   Widget build(BuildContext context) {
     final color = _kEstadoColor[widget.estado]!;
+    final surface = Theme.of(context).colorScheme.surface;
+    final outlineVariant = Theme.of(context).colorScheme.outlineVariant;
     return DragTarget<Tarea>(
       onWillAcceptWithDetails: (d) => d.data.estado != widget.estado,
       onAcceptWithDetails: (d) { widget.onDrop(d.data); setState(() => _accepting = false); },
@@ -475,10 +478,10 @@ class _KanbanColumnaState extends State<_KanbanColumna> {
           width: 260,
           margin: const EdgeInsets.only(right: 12),
           decoration: BoxDecoration(
-            color: _accepting ? color.withValues(alpha: 0.08) : Colors.grey[100],
+            color: Color.alphaBlend(color.withValues(alpha: _accepting ? 0.16 : 0.08), surface),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: _accepting ? color : Colors.grey[300]!,
+              color: _accepting ? color : outlineVariant,
               width: _accepting ? 2 : 1,
             ),
           ),
@@ -522,7 +525,7 @@ class _KanbanColumnaState extends State<_KanbanColumna> {
                     ? Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text('Sin tareas',
-                            style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13)),
                       )
                     : ListView.builder(
                         shrinkWrap: true,
@@ -614,6 +617,7 @@ class _CardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final card = Card(
       margin: const EdgeInsets.only(bottom: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -639,17 +643,17 @@ class _CardBody extends StatelessWidget {
               const SizedBox(height: 4),
               Text(tarea.descripcion,
                   maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
             ],
             const SizedBox(height: 6),
             Row(
               children: [
                 if (tarea.asignadoANombre != null) ...[
-                  Icon(Icons.person_outline, size: 12, color: Colors.grey[500]),
+                  Icon(Icons.person_outline, size: 12, color: cs.onSurfaceVariant),
                   const SizedBox(width: 2),
                   Expanded(
                     child: Text(tarea.asignadoANombre!,
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                         overflow: TextOverflow.ellipsis),
                   ),
                 ] else
@@ -669,10 +673,10 @@ class _CardBody extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(Icons.calendar_today_outlined, size: 11, color: Colors.grey[400]),
+                  Icon(Icons.calendar_today_outlined, size: 11, color: cs.onSurfaceVariant),
                   const SizedBox(width: 4),
                   Text('${_fmt(tarea.fechaInicio)} → ${_fmt(tarea.fechaFin)}',
-                      style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                      style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
                 ],
               ),
             ],
@@ -708,14 +712,15 @@ class _DialogoVerTarea extends StatelessWidget {
       ? 'Sin fecha'
       : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 
-  Widget _fila(String label, String valor) => Padding(
+  Widget _fila(BuildContext context, String label, String valor) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
               width: 100,
-              child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              child: Text(label,
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
             Expanded(child: Text(valor, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
           ],
@@ -733,14 +738,14 @@ class _DialogoVerTarea extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (tarea.descripcion.isNotEmpty) ...[
-              Text(tarea.descripcion, style: TextStyle(color: Colors.grey[700])),
+              Text(tarea.descripcion, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 14),
             ],
-            _fila('Estado', _kEstadoLabel[tarea.estado] ?? tarea.estado),
-            _fila('Prioridad', tarea.prioridad),
-            _fila('Asignado a', tarea.asignadoANombre ?? 'Sin asignar'),
-            _fila('Fecha inicio', _fmt(tarea.fechaInicio)),
-            _fila('Fecha fin', _fmt(tarea.fechaFin)),
+            _fila(context, 'Estado', _kEstadoLabel[tarea.estado] ?? tarea.estado),
+            _fila(context, 'Prioridad', tarea.prioridad),
+            _fila(context, 'Asignado a', tarea.asignadoANombre ?? 'Sin asignar'),
+            _fila(context, 'Fecha inicio', _fmt(tarea.fechaInicio)),
+            _fila(context, 'Fecha fin', _fmt(tarea.fechaFin)),
           ],
         ),
       ),
@@ -997,16 +1002,17 @@ class _GanttViewState extends State<_GanttView> {
   @override
   Widget build(BuildContext context) {
     if (widget.tareas.isEmpty) {
+      final cs = Theme.of(context).colorScheme;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.bar_chart_rounded, size: 64, color: Colors.grey[300]),
+            Icon(Icons.bar_chart_rounded, size: 64, color: cs.onSurfaceVariant),
             const SizedBox(height: 12),
-            Text('Sin tareas aún', style: TextStyle(color: Colors.grey[500], fontSize: 16)),
+            Text('Sin tareas aún', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16)),
             const SizedBox(height: 4),
             Text('Crea tareas en la vista Kanban para verlas aquí.',
-                style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
           ],
         ),
       );
@@ -1037,6 +1043,7 @@ class _GanttViewState extends State<_GanttView> {
                     dragHit: _dragHit,
                     hoverIndex: _hoverIndex,
                     selectedIndex: _selectedIndex,
+                    colorScheme: Theme.of(context).colorScheme,
                   ),
                 ),
               ),
@@ -1051,9 +1058,10 @@ class _GanttViewState extends State<_GanttView> {
   }
 
   Widget _zoomControl() {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(8),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.12), blurRadius: 6, offset: const Offset(0, 2))],
       ),
@@ -1067,7 +1075,7 @@ class _GanttViewState extends State<_GanttView> {
             padding: EdgeInsets.zero,
             onPressed: _pxPerDay <= kMinPxPerDay ? null : () => _zoom(-8),
           ),
-          Container(width: 1, height: 18, color: Colors.grey[300]),
+          Container(width: 1, height: 18, color: cs.outlineVariant),
           IconButton(
             icon: const Icon(Icons.add, size: 16),
             tooltip: 'Acercar',
@@ -1081,6 +1089,7 @@ class _GanttViewState extends State<_GanttView> {
   }
 
   Widget _buildTooltip(BoxConstraints constraints, int index, Offset pos) {
+    final cs = Theme.of(context).colorScheme;
     final t = _tareas[index];
     const w = 220.0;
     const approxH = 116.0;
@@ -1099,7 +1108,7 @@ class _GanttViewState extends State<_GanttView> {
           width: w,
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cs.surface,
             borderRadius: BorderRadius.circular(10),
             boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18), blurRadius: 14, offset: const Offset(0, 4))],
           ),
@@ -1112,17 +1121,17 @@ class _GanttViewState extends State<_GanttView> {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               const SizedBox(height: 6),
               Row(children: [
-                Icon(Icons.event_outlined, size: 13, color: Colors.grey[500]),
+                Icon(Icons.event_outlined, size: 13, color: cs.onSurfaceVariant),
                 const SizedBox(width: 5),
                 Text('${_fmt(t.fechaInicio ?? widget.proyecto.fechaInicio)} → ${_fmt(t.fechaFin ?? widget.proyecto.fechaFin)}',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+                    style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
               ]),
               const SizedBox(height: 4),
               Row(children: [
-                Icon(Icons.person_outline, size: 13, color: Colors.grey[500]),
+                Icon(Icons.person_outline, size: 13, color: cs.onSurfaceVariant),
                 const SizedBox(width: 5),
                 Text(t.asignadoANombre ?? 'Sin asignar',
-                    style: TextStyle(fontSize: 11.5, color: Colors.grey[700])),
+                    style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
               ]),
               const SizedBox(height: 8),
               Container(
@@ -1150,6 +1159,7 @@ class _GanttPainter extends CustomPainter {
   final _DragHit? dragHit;
   final int? hoverIndex;
   final int? selectedIndex;
+  final ColorScheme colorScheme;
 
   static const kLabelWidth = 180.0;
   static const kHeaderHeight = 52.0;
@@ -1166,6 +1176,7 @@ class _GanttPainter extends CustomPainter {
     this.dragHit,
     this.hoverIndex,
     this.selectedIndex,
+    required this.colorScheme,
   });
 
   DateTime _eInicio(Tarea t) => t.fechaInicio ?? proyecto.fechaInicio;
@@ -1181,7 +1192,7 @@ class _GanttPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFF0F2F8));
+    canvas.drawRect(Offset.zero & size, Paint()..color = colorScheme.surfaceContainerLow);
 
     // ── scrollable timeline ──
     canvas.save();
@@ -1199,7 +1210,7 @@ class _GanttPainter extends CustomPainter {
     // ── fixed left panel (drawn after restore so always on top) ──
     _drawLeftPanel(canvas, size);
     canvas.drawLine(Offset(kLabelWidth, 0), Offset(kLabelWidth, size.height),
-        Paint()..color = Colors.grey[300]!..strokeWidth = 1);
+        Paint()..color = colorScheme.outlineVariant..strokeWidth = 1);
   }
 
   void _drawWeekBands(Canvas canvas, Size size) {
@@ -1209,7 +1220,7 @@ class _GanttPainter extends CustomPainter {
       if (_isWeekend(cur)) {
         canvas.drawRect(
           Rect.fromLTWH(d * pxPerDay, kHeaderHeight, pxPerDay, size.height - kHeaderHeight),
-          Paint()..color = const Color(0xFFEAEDF6),
+          Paint()..color = colorScheme.surfaceContainerHighest,
         );
       }
       cur = cur.add(const Duration(days: 1));
@@ -1263,8 +1274,8 @@ class _GanttPainter extends CustomPainter {
   }
 
   void _drawGrid(Canvas canvas, Size size) {
-    final mondayP = Paint()..color = Colors.grey[300]!..strokeWidth = 0.6;
-    final monthP = Paint()..color = Colors.grey[400]!..strokeWidth = 1.1;
+    final mondayP = Paint()..color = colorScheme.outlineVariant..strokeWidth = 0.6;
+    final monthP = Paint()..color = colorScheme.outline..strokeWidth = 1.1;
     final totalDays = proyecto.fechaFin.difference(proyecto.fechaInicio).inDays + 14;
     DateTime cur = proyecto.fechaInicio;
     for (int d = 0; d < totalDays; d++) {
@@ -1278,7 +1289,7 @@ class _GanttPainter extends CustomPainter {
     for (int i = 0; i <= tareas.length; i++) {
       final y = kHeaderHeight + i * kRowHeight;
       canvas.drawLine(Offset(_visLeft(), y), Offset(_visRight(size), y),
-          Paint()..color = Colors.grey[200]!..strokeWidth = 0.5);
+          Paint()..color = colorScheme.outlineVariant..strokeWidth = 0.5);
     }
   }
 
@@ -1387,7 +1398,7 @@ class _GanttPainter extends CustomPainter {
   }
 
   void _drawLeftPanel(Canvas canvas, Size size) {
-    canvas.drawRect(Rect.fromLTWH(0, 0, kLabelWidth, size.height), Paint()..color = Colors.white);
+    canvas.drawRect(Rect.fromLTWH(0, 0, kLabelWidth, size.height), Paint()..color = colorScheme.surface);
     canvas.drawRect(Rect.fromLTWH(0, 0, kLabelWidth, kHeaderHeight), Paint()..color = _primary);
     _text(canvas, proyecto.nombre, const Offset(14, 8),
         const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700),
@@ -1408,7 +1419,9 @@ class _GanttPainter extends CustomPainter {
         Paint()
           ..color = isSelected
               ? pc.withValues(alpha: 0.14)
-              : (isHover ? const Color(0xFFEEF1FA) : (i.isEven ? const Color(0xFFF8F9FC) : Colors.white)),
+              : (isHover
+                  ? colorScheme.surfaceContainerHighest
+                  : (i.isEven ? colorScheme.surfaceContainerLow : colorScheme.surface)),
       );
       if (isSelected) {
         canvas.drawRect(Rect.fromLTWH(0, y, 3, kRowHeight), Paint()..color = _selectColor);
@@ -1420,7 +1433,7 @@ class _GanttPainter extends CustomPainter {
           TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w600,
-              color: t.estado == 'hecho' ? Colors.grey[500]! : Colors.grey[850]!,
+              color: t.estado == 'hecho' ? colorScheme.onSurfaceVariant : colorScheme.onSurface,
               decoration: t.estado == 'hecho' ? TextDecoration.lineThrough : null),
           maxWidth: kLabelWidth - 58);
 
@@ -1434,10 +1447,10 @@ class _GanttPainter extends CustomPainter {
         )..layout();
         tp.paint(canvas, av - Offset(tp.width / 2, tp.height / 2));
         _text(canvas, t.asignadoANombre!, Offset(20, y + 27),
-            TextStyle(fontSize: 10, color: Colors.grey[500]!), maxWidth: kLabelWidth - 58);
+            TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant), maxWidth: kLabelWidth - 58);
       } else {
         _text(canvas, 'Sin asignar', Offset(20, y + 27),
-            TextStyle(fontSize: 10, color: Colors.grey[400]!, fontStyle: FontStyle.italic));
+            TextStyle(fontSize: 10, color: colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic));
       }
     }
   }
@@ -1475,7 +1488,8 @@ class _GanttPainter extends CustomPainter {
       old.tareas != tareas ||
       old.dragHit != dragHit ||
       old.hoverIndex != hoverIndex ||
-      old.selectedIndex != selectedIndex;
+      old.selectedIndex != selectedIndex ||
+      old.colorScheme != colorScheme;
 }
 
 // ── Diálogo tarea ──────────────────────────────────────────────────────────

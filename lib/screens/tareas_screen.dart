@@ -84,9 +84,9 @@ class _TareasScreenState extends State<TareasScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
+            Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
             const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.grey)),
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             const SizedBox(height: 12),
             FilledButton.icon(
                 onPressed: _cargar,
@@ -102,18 +102,18 @@ class _TareasScreenState extends State<TareasScreen> {
         _proyectoFiltro != null || _estadoFiltro != null || _prioridadFiltro != null;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F8),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  const Icon(Icons.filter_list, size: 18, color: Colors.grey),
+                  Icon(Icons.filter_list, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 8),
                   _FiltroChip(
                     label: _proyectoFiltro == null
@@ -156,7 +156,7 @@ class _TareasScreenState extends State<TareasScreen> {
                   ],
                   const SizedBox(width: 16),
                   Text('${lista.length} tarea${lista.length != 1 ? 's' : ''}',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
                 ],
               ),
             ),
@@ -168,10 +168,10 @@ class _TareasScreenState extends State<TareasScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.task_outlined, size: 64, color: Colors.grey[300]),
+                        Icon(Icons.task_outlined, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(height: 12),
                         Text('Sin tareas',
-                            style: TextStyle(fontSize: 18, color: Colors.grey[500])),
+                            style: TextStyle(fontSize: 18, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         if (hayFiltros) ...[
                           const SizedBox(height: 8),
                           TextButton(
@@ -283,16 +283,17 @@ class _FiltroChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: activo ? const Color(0xFF1A2B72) : Colors.grey[100],
+          color: activo ? const Color(0xFF1A2B72) : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-              color: activo ? const Color(0xFF1A2B72) : Colors.grey[300]!),
+              color: activo ? const Color(0xFF1A2B72) : cs.outlineVariant),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -300,12 +301,12 @@ class _FiltroChip extends StatelessWidget {
             Text(label,
                 style: TextStyle(
                     fontSize: 12,
-                    color: activo ? Colors.white : Colors.grey[700],
+                    color: activo ? Colors.white : cs.onSurfaceVariant,
                     fontWeight: activo ? FontWeight.bold : FontWeight.normal)),
             const SizedBox(width: 4),
             Icon(Icons.arrow_drop_down,
                 size: 16,
-                color: activo ? Colors.white : Colors.grey[600]),
+                color: activo ? Colors.white : cs.onSurfaceVariant),
           ],
         ),
       ),
@@ -340,6 +341,7 @@ class _TareaFila extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final eColor = estadoColor[tarea.estado] ?? Colors.grey;
     return Card(
       margin: const EdgeInsets.only(bottom: 6),
@@ -368,23 +370,23 @@ class _TareaFila extends StatelessWidget {
                             ? TextDecoration.lineThrough
                             : null,
                         color: tarea.estado == 'hecho'
-                            ? Colors.grey[500]
-                            : Colors.grey[800],
+                            ? cs.onSurfaceVariant
+                            : cs.onSurface,
                       )),
                   const SizedBox(height: 2),
                   Row(
                     children: [
                       Text(tarea.proyectoNombre,
-                          style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                       if (tarea.asignadoANombre != null) ...[
                         Text(' · ',
-                            style: TextStyle(color: Colors.grey[400])),
+                            style: TextStyle(color: cs.onSurfaceVariant)),
                         Icon(Icons.person_outline,
-                            size: 11, color: Colors.grey[400]),
+                            size: 11, color: cs.onSurfaceVariant),
                         const SizedBox(width: 2),
                         Text(tarea.asignadoANombre!,
                             style:
-                                TextStyle(fontSize: 11, color: Colors.grey[500])),
+                                TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                       ],
                     ],
                   ),
@@ -419,7 +421,7 @@ class _TareaFila extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '${_fmt(tarea.fechaInicio)} → ${_fmt(tarea.fechaFin)}',
-                  style: TextStyle(fontSize: 10, color: Colors.grey[400]),
+                  style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
                 ),
               ],
             ),
