@@ -90,7 +90,7 @@ class DashboardScreen extends StatelessWidget {
         : <Proyecto>[];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: LayoutBuilder(
         builder: (context, constraints) {
           int col = 1;
@@ -117,64 +117,64 @@ class DashboardScreen extends StatelessWidget {
                 const SizedBox(height: 28),
 
                 if (_soporteVisible) ...[
-                  _sectionHeader('Tickets de Soporte', Icons.confirmation_number_rounded, Colors.indigo),
+                  _sectionHeader(context, 'Tickets de Soporte', Icons.confirmation_number_rounded, Colors.indigo),
                   const SizedBox(height: 14),
                   _cardGrid(col: col, cardHeight: cardHeight, children: [
-                    _cardDonut(titulo: 'Pendientes', numero: '$pendientes', subtitulo: 'de $total tickets', progreso: total > 0 ? pendientes / total : 0, color: Colors.red.shade600, icono: Icons.hourglass_top_rounded, narrow: narrow, onTap: onNavigateTickets),
-                    _cardDonut(titulo: 'En Proceso', numero: '$enProceso', subtitulo: 'de $total tickets', progreso: total > 0 ? enProceso / total : 0, color: Colors.orange.shade700, icono: Icons.autorenew_rounded, narrow: narrow, onTap: onNavigateTickets),
-                    _cardDonut(titulo: 'Resueltos', numero: '$resueltos', subtitulo: 'de $total tickets', progreso: total > 0 ? resueltos / total : 0, color: Colors.green.shade600, icono: Icons.check_circle_rounded, narrow: narrow, onTap: onNavigateTickets),
-                    _cardDonut(titulo: 'Prioridad Alta', numero: '$alta', subtitulo: 'sin resolver', progreso: total > 0 ? alta / total : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'Pendientes', numero: '$pendientes', subtitulo: 'de $total tickets', progreso: total > 0 ? pendientes / total : 0, color: Colors.red.shade600, icono: Icons.hourglass_top_rounded, narrow: narrow, context: context, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'En Proceso', numero: '$enProceso', subtitulo: 'de $total tickets', progreso: total > 0 ? enProceso / total : 0, color: Colors.orange.shade700, icono: Icons.autorenew_rounded, narrow: narrow, context: context, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'Resueltos', numero: '$resueltos', subtitulo: 'de $total tickets', progreso: total > 0 ? resueltos / total : 0, color: Colors.green.shade600, icono: Icons.check_circle_rounded, narrow: narrow, context: context, onTap: onNavigateTickets),
+                    _cardDonut(titulo: 'Prioridad Alta', numero: '$alta', subtitulo: 'sin resolver', progreso: total > 0 ? alta / total : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, context: context, onTap: onNavigateTickets),
                   ]),
                   const SizedBox(height: 32),
 
-                  _sectionHeader('Inventario de Equipos', Icons.computer_rounded, const Color(0xFF1A2B72)),
+                  _sectionHeader(context, 'Inventario de Equipos', Icons.computer_rounded, const Color(0xFF1A2B72)),
                   const SizedBox(height: 14),
                   _cardGrid(col: col, cardHeight: cardHeight, children: [
-                    _cardDonut(titulo: 'Asignados', numero: '$asignados', subtitulo: 'de $totalEquipos equipos', progreso: totalEquipos > 0 ? asignados / totalEquipos : 0, color: Colors.indigo.shade600, icono: Icons.person_rounded, narrow: narrow, onTap: onNavigateEquipos),
-                    _cardDonut(titulo: 'Disponibles', numero: '$disponibles', subtitulo: 'en almacén', progreso: totalEquipos > 0 ? disponibles / totalEquipos : 0, color: Colors.blue.shade700, icono: Icons.inventory_2_rounded, narrow: narrow, onTap: onNavigateEquipos),
-                    _cardStat(titulo: 'Valor del Inventario', numero: '\$${_formatMiles(valorTotal)}', subtitulo: 'MXN depreciado', color: Colors.blueGrey.shade700, icono: Icons.account_balance_wallet_rounded, narrow: narrow, onTap: onNavigateEquipos),
-                    _cardStat(titulo: 'Total de Equipos', numero: '$totalEquipos', subtitulo: 'registrados', color: Colors.blue.shade700, icono: Icons.devices_rounded, narrow: narrow, onTap: onNavigateEquipos),
+                    _cardDonut(titulo: 'Asignados', numero: '$asignados', subtitulo: 'de $totalEquipos equipos', progreso: totalEquipos > 0 ? asignados / totalEquipos : 0, color: Colors.indigo.shade600, icono: Icons.person_rounded, narrow: narrow, context: context, onTap: onNavigateEquipos),
+                    _cardDonut(titulo: 'Disponibles', numero: '$disponibles', subtitulo: 'en almacén', progreso: totalEquipos > 0 ? disponibles / totalEquipos : 0, color: Colors.blue.shade700, icono: Icons.inventory_2_rounded, narrow: narrow, context: context, onTap: onNavigateEquipos),
+                    _cardStat(titulo: 'Valor del Inventario', numero: '\$${_formatMiles(valorTotal)}', subtitulo: 'MXN depreciado', color: Colors.blueGrey.shade700, icono: Icons.account_balance_wallet_rounded, narrow: narrow, context: context, onTap: onNavigateEquipos),
+                    _cardStat(titulo: 'Total de Equipos', numero: '$totalEquipos', subtitulo: 'registrados', color: Colors.blue.shade700, icono: Icons.devices_rounded, narrow: narrow, context: context, onTap: onNavigateEquipos),
                   ]),
                   const SizedBox(height: 32),
 
-                  _sectionHeader('Estado de Respaldos', Icons.backup_rounded, Colors.purple),
+                  _sectionHeader(context, 'Estado de Respaldos', Icons.backup_rounded, Colors.purple),
                   const SizedBox(height: 14),
                   _cardGrid(col: col, cardHeight: cardHeight, children: [
-                    _cardDonut(titulo: 'Al día', numero: '$conRespaldo', subtitulo: 'últimos 15 días', progreso: totalEquipos > 0 ? conRespaldo / totalEquipos : 0, color: Colors.green.shade600, icono: Icons.cloud_done_rounded, narrow: narrow, onTap: onNavigateRespaldos),
-                    _cardDonut(titulo: 'Atrasados', numero: '$sinRespaldo', subtitulo: '+15 días sin respaldo', progreso: totalEquipos > 0 ? sinRespaldo / totalEquipos : 0, color: Colors.red.shade600, icono: Icons.cloud_off_rounded, narrow: narrow, onTap: onNavigateRespaldos),
+                    _cardDonut(titulo: 'Al día', numero: '$conRespaldo', subtitulo: 'últimos 15 días', progreso: totalEquipos > 0 ? conRespaldo / totalEquipos : 0, color: Colors.green.shade600, icono: Icons.cloud_done_rounded, narrow: narrow, context: context, onTap: onNavigateRespaldos),
+                    _cardDonut(titulo: 'Atrasados', numero: '$sinRespaldo', subtitulo: '+15 días sin respaldo', progreso: totalEquipos > 0 ? sinRespaldo / totalEquipos : 0, color: Colors.red.shade600, icono: Icons.cloud_off_rounded, narrow: narrow, context: context, onTap: onNavigateRespaldos),
                   ]),
 
                   if (recientes.isNotEmpty) ...[
                     const SizedBox(height: 32),
-                    _sectionHeader('Últimos Tickets Registrados', Icons.history_rounded, Colors.blueGrey),
+                    _sectionHeader(context, 'Últimos Tickets Registrados', Icons.history_rounded, Colors.blueGrey),
                     const SizedBox(height: 14),
-                    _recentTicketsCard(recientes),
+                    _recentTicketsCard(context, recientes),
                   ],
                 ],
 
                 if (_desarrolloVisible) ...[
                   if (_soporteVisible) const SizedBox(height: 32),
-                  _sectionHeader('Proyectos', Icons.folder_special_rounded, Colors.teal),
+                  _sectionHeader(context, 'Proyectos', Icons.folder_special_rounded, Colors.teal),
                   const SizedBox(height: 14),
                   _cardGrid(col: col, cardHeight: cardHeight, children: [
-                    _cardStat(titulo: 'Proyectos Activos', numero: '$proyectosActivos', subtitulo: 'de $totalProyectos totales', color: Colors.teal.shade700, icono: Icons.folder_special_rounded, narrow: narrow, onTap: onNavigateProyectos),
+                    _cardStat(titulo: 'Proyectos Activos', numero: '$proyectosActivos', subtitulo: 'de $totalProyectos totales', color: Colors.teal.shade700, icono: Icons.folder_special_rounded, narrow: narrow, context: context, onTap: onNavigateProyectos),
                   ]),
                   const SizedBox(height: 32),
 
-                  _sectionHeader(_vistaGlobalDesarrollo ? 'Tareas del Equipo' : 'Mis Tareas', Icons.task_alt_rounded, Colors.deepPurple),
+                  _sectionHeader(context, _vistaGlobalDesarrollo ? 'Tareas del Equipo' : 'Mis Tareas', Icons.task_alt_rounded, Colors.deepPurple),
                   const SizedBox(height: 14),
                   _cardGrid(col: col, cardHeight: cardHeight, children: [
-                    _cardDonut(titulo: 'Por hacer', numero: '$tareasPorHacer', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasPorHacer / totalTareasVisibles : 0, color: Colors.grey.shade600, icono: Icons.pending_actions_rounded, narrow: narrow, onTap: onNavigateTareas),
-                    _cardDonut(titulo: 'Haciendo', numero: '$tareasHaciendo', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasHaciendo / totalTareasVisibles : 0, color: Colors.blue.shade700, icono: Icons.autorenew_rounded, narrow: narrow, onTap: onNavigateTareas),
-                    _cardDonut(titulo: 'En revisión', numero: '$tareasEnRevision', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasEnRevision / totalTareasVisibles : 0, color: Colors.orange.shade700, icono: Icons.rate_review_rounded, narrow: narrow, onTap: onNavigateTareas),
-                    _cardDonut(titulo: 'Prioridad alta', numero: '$tareasAltaPendiente', subtitulo: 'sin terminar', progreso: totalTareasVisibles > 0 ? tareasAltaPendiente / totalTareasVisibles : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'Por hacer', numero: '$tareasPorHacer', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasPorHacer / totalTareasVisibles : 0, color: Colors.grey.shade600, icono: Icons.pending_actions_rounded, narrow: narrow, context: context, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'Haciendo', numero: '$tareasHaciendo', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasHaciendo / totalTareasVisibles : 0, color: Colors.blue.shade700, icono: Icons.autorenew_rounded, narrow: narrow, context: context, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'En revisión', numero: '$tareasEnRevision', subtitulo: 'de $totalTareasVisibles tareas', progreso: totalTareasVisibles > 0 ? tareasEnRevision / totalTareasVisibles : 0, color: Colors.orange.shade700, icono: Icons.rate_review_rounded, narrow: narrow, context: context, onTap: onNavigateTareas),
+                    _cardDonut(titulo: 'Prioridad alta', numero: '$tareasAltaPendiente', subtitulo: 'sin terminar', progreso: totalTareasVisibles > 0 ? tareasAltaPendiente / totalTareasVisibles : 0, color: Colors.deepOrange.shade700, icono: Icons.priority_high_rounded, narrow: narrow, context: context, onTap: onNavigateTareas),
                   ]),
 
                   if (proyectosRecientes.isNotEmpty) ...[
                     const SizedBox(height: 32),
-                    _sectionHeader('Proyectos Recientes', Icons.history_rounded, Colors.blueGrey),
+                    _sectionHeader(context, 'Proyectos Recientes', Icons.history_rounded, Colors.blueGrey),
                     const SizedBox(height: 14),
-                    _recentProjectsCard(proyectosRecientes),
+                    _recentProjectsCard(context, proyectosRecientes),
                   ],
                 ],
                 const SizedBox(height: 24),
@@ -295,7 +295,8 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _sectionHeader(String titulo, IconData icono, Color color) {
+  Widget _sectionHeader(BuildContext context, String titulo, IconData icono, Color color) {
+    final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
@@ -304,9 +305,9 @@ class DashboardScreen extends StatelessWidget {
           child: Icon(icono, color: color, size: 16),
         ),
         const SizedBox(width: 10),
-        Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+        Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: cs.onSurface)),
         const SizedBox(width: 12),
-        Expanded(child: Container(height: 1, color: Colors.grey.shade200)),
+        Expanded(child: Container(height: 1, color: cs.outlineVariant)),
       ],
     );
   }
@@ -325,9 +326,9 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _cardShell({required Color color, required Widget child, VoidCallback? onTap}) {
+  Widget _cardShell({required BuildContext context, required Color color, required Widget child, VoidCallback? onTap}) {
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
@@ -363,9 +364,12 @@ class DashboardScreen extends StatelessWidget {
     required Color color,
     required IconData icono,
     required bool narrow,
+    required BuildContext context,
     VoidCallback? onTap,
   }) {
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
     return _cardShell(
+      context: context,
       onTap: onTap,
       color: color,
       child: narrow
@@ -383,7 +387,7 @@ class DashboardScreen extends StatelessWidget {
                       Expanded(child: Text(titulo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis)),
                     ]),
                     const SizedBox(height: 4),
-                    Text(subtitulo, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    Text(subtitulo, style: TextStyle(fontSize: 11, color: onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -399,7 +403,7 @@ class DashboardScreen extends StatelessWidget {
                 const Spacer(),
                 Center(child: _ring(numero, progreso, color, 52)),
                 const SizedBox(height: 6),
-                Center(child: Text(subtitulo, style: TextStyle(fontSize: 10, color: Colors.grey.shade500), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                Center(child: Text(subtitulo, style: TextStyle(fontSize: 10, color: onSurfaceVariant), maxLines: 1, overflow: TextOverflow.ellipsis)),
               ],
             ),
     );
@@ -431,9 +435,12 @@ class DashboardScreen extends StatelessWidget {
     required Color color,
     required IconData icono,
     required bool narrow,
+    required BuildContext context,
     VoidCallback? onTap,
   }) {
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
     return _cardShell(
+      context: context,
       onTap: onTap,
       color: color,
       child: narrow
@@ -451,7 +458,7 @@ class DashboardScreen extends StatelessWidget {
                   children: [
                     Text(titulo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                     Text(numero, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(subtitulo, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    Text(subtitulo, style: TextStyle(fontSize: 11, color: onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -466,16 +473,16 @@ class DashboardScreen extends StatelessWidget {
                 ]),
                 const Spacer(),
                 Text(numero, style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text(subtitulo, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                Text(subtitulo, style: TextStyle(fontSize: 10, color: onSurfaceVariant)),
               ],
             ),
     );
   }
 
-  Widget _recentTicketsCard(List<Ticket> recientes) {
+  Widget _recentTicketsCard(BuildContext context, List<Ticket> recientes) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
       ),
@@ -483,14 +490,15 @@ class DashboardScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Column(
           children: recientes.asMap().entries.map((entry) {
-            return _ticketRow(entry.value, isLast: entry.key == recientes.length - 1, onTap: onNavigateTickets);
+            return _ticketRow(context, entry.value, isLast: entry.key == recientes.length - 1, onTap: onNavigateTickets);
           }).toList(),
         ),
       ),
     );
   }
 
-  Widget _ticketRow(Ticket t, {required bool isLast, VoidCallback? onTap}) {
+  Widget _ticketRow(BuildContext context, Ticket t, {required bool isLast, VoidCallback? onTap}) {
+    final cs = Theme.of(context).colorScheme;
     final estadoColor = switch (t.estado) {
       'Pendiente' => Colors.red.shade600,
       'En Proceso' => Colors.orange.shade700,
@@ -521,7 +529,7 @@ class DashboardScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(t.descripcion, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text('${t.usuario} · ${t.departamento}', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                    Text('${t.usuario} · ${t.departamento}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -538,15 +546,15 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
         ),
-        if (!isLast) Divider(height: 1, color: Colors.grey.shade100),
+        if (!isLast) Divider(height: 1, color: cs.outlineVariant),
       ],
     );
   }
 
-  Widget _recentProjectsCard(List<Proyecto> recientes) {
+  Widget _recentProjectsCard(BuildContext context, List<Proyecto> recientes) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
       ),
@@ -554,14 +562,15 @@ class DashboardScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Column(
           children: recientes.asMap().entries.map((entry) {
-            return _projectRow(entry.value, isLast: entry.key == recientes.length - 1, onTap: onNavigateProyectos);
+            return _projectRow(context, entry.value, isLast: entry.key == recientes.length - 1, onTap: onNavigateProyectos);
           }).toList(),
         ),
       ),
     );
   }
 
-  Widget _projectRow(Proyecto p, {required bool isLast, VoidCallback? onTap}) {
+  Widget _projectRow(BuildContext context, Proyecto p, {required bool isLast, VoidCallback? onTap}) {
+    final cs = Theme.of(context).colorScheme;
     final estadoColor = switch (p.estado) {
       'terminado' => Colors.green.shade600,
       'pausado' => Colors.orange.shade700,
@@ -588,7 +597,7 @@ class DashboardScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(p.nombre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
-                      Text('${p.tareasHecho}/${p.tareasTotal} tareas', style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                      Text('${p.tareasHecho}/${p.tareasTotal} tareas', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
                     ],
                   ),
                 ),
@@ -598,7 +607,7 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
         ),
-        if (!isLast) Divider(height: 1, color: Colors.grey.shade100),
+        if (!isLast) Divider(height: 1, color: cs.outlineVariant),
       ],
     );
   }
