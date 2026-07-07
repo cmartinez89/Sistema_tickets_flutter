@@ -408,7 +408,7 @@ class _TicketsScreenState extends State<TicketsScreen> {
                             margin: const EdgeInsets.only(bottom: 6),
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.blueGrey.shade50,
+                              color: Theme.of(ctx).colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Column(
