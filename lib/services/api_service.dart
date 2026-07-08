@@ -202,7 +202,7 @@ class ApiService {
   Future<void> cambiarPassword(String username, String passwordNueva) async {
     final res = await http.post(
       Uri.parse('$kApiUrl/cambiar-password'),
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode({'username': username, 'passwordNueva': passwordNueva}),
     ).timeout(kTimeout);
     if (res.statusCode != 200) throw Exception('Error al cambiar contraseña');
