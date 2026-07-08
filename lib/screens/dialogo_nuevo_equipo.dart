@@ -195,14 +195,14 @@ void abrirDialogoNuevoEquipo({
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: const Color(0xFFE8EAF6), borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.primaryContainer, borderRadius: BorderRadius.circular(8)),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Color(0xFF1A2B72)),
+                          Icon(Icons.info_outline, size: 14, color: Theme.of(ctx).colorScheme.onPrimaryContainer),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text('El folio de activo se generará automáticamente.',
-                                style: TextStyle(fontSize: 11, color: Color(0xFF1A2B72))),
+                                style: TextStyle(fontSize: 11, color: Theme.of(ctx).colorScheme.onPrimaryContainer)),
                           ),
                         ],
                       ),

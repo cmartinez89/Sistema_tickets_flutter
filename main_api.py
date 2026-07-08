@@ -1367,6 +1367,7 @@ async def update_usuario(username: str, req: UsuarioUpdateRequest, current_user:
                 for tabla, columna in [
                     ("tickets", "usuario"), ("tickets", "asignado_a"),
                     ("ticket_comentarios", "usuario"),
+                    ("ticket_historial", "usuario"),
                     ("mensajes", "de_usuario"), ("mensajes", "borrado_por"),
                     ("proyectos", "responsable_username"),
                     ("tareas", "asignado_a_username"),
