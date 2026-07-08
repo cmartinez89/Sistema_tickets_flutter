@@ -34,6 +34,8 @@ Fuera de alcance (proyecto futuro):
 - Despliegue centralizado vía GPO/RMM — hoy no hay dominio ni herramienta de
   este tipo; la instalación es manual equipo por equipo (vía RustDesk), como
   ya se hace hoy para todo lo demás.
+- Auto-detección del RustDesk ID (ver nota en la sección 5) — el agente
+  manda `rustdeskId: null` en v1; se sigue capturando a mano como hoy.
 
 ## 1. Arquitectura
 
@@ -83,13 +85,22 @@ no incluye este valor, así que una vez editado pasa a un estatus normal.
 Para no duplicar equipos en cada corrida periódica:
 
 1. Si `agente_uuid` del payload ya existe en algún equipo → **actualiza** esa
-   fila (telemetría + `mac_address` + `rustdesk`).
+   fila (telemetría + `mac_address`).
 2. Si no, pero `mac_address` coincide con un equipo dado de alta a mano (sin
    `agente_uuid` todavía) → **vincula** (rellena `agente_uuid` en esa fila) y
    actualiza su telemetría. Así un equipo que el admin ya capturó
    manualmente no se duplica cuando se instala el agente en él.
 3. Si no coincide nada → **crea** un equipo nuevo con estatus
    `"Pendiente de captura"`, campos de negocio en placeholder
+
+**Importante — actualización parcial, no se pisan datos capturados a mano:**
+`rustdesk` (y en general cualquier campo que venga `null` en el payload) NO
+se sobreescribe si el equipo ya tenía un valor guardado. Como en v1 el agente
+siempre manda `rustdeskId: null`, si actualizáramos ese campo sin condición
+se borraría el RustDesk ID que un admin ya había capturado a mano antes de
+instalar el agente. La actualización de cada campo de telemetría es
+"solo si el payload trae un valor no nulo", nunca un `UPDATE` incondicional
+de la fila completa.
    (`folio_responsiva='---'`, `valor_adquisicion=0`, `tipo='Por clasificar'`,
    `ano_adquisicion=<año actual>`), usando `marca`/`modelo`/`no_serie` del
    payload si vinieron (mejor esfuerzo vía BIOS/WMI), más toda la telemetría.
@@ -189,11 +200,28 @@ reporte completo, ese campo se manda como `null`.
 | MAC address | Se busca en `psutil.net_if_addrs()` la interfaz cuya IP coincide con la IP local detectada, y se toma su dirección física — evita reportar la MAC de un adaptador virtual/inactivo |
 | Uptime | `time.time() - psutil.boot_time()` |
 | Marca/modelo/no. serie | Paquete `wmi` (BIOS/ComputerSystem), mejor esfuerzo |
-| RustDesk ID | Ejecutar `rustdesk.exe --get-id` (flag de línea de comandos, estable entre versiones) y leer stdout. Fallback: leer `C:\ProgramData\RustDesk\config\RustDesk2.toml`. **Pendiente de verificar en un equipo real antes de la implementación final** — la ruta exacta del archivo de config varía entre versiones de RustDesk |
+| RustDesk ID | **De-alcance para v1, ver nota abajo.** Se manda `null`; se sigue capturando a mano en Inventario como hoy |
 | UUID del agente | `C:\ProgramData\SoporteAgente\agent_id.txt`; si no existe, se genera con `uuid.uuid4()` y se persiste ahí (ProgramData, no AppData de usuario, porque corre como SYSTEM) |
 
 Dependencias nuevas: `psutil`, `requests`, `wmi` (+ `pywin32` como
 dependencia de `wmi`). Resto con librería estándar.
+
+**Nota sobre RustDesk ID (validado empíricamente, no solo por documentación):**
+se probó en una máquina real con RustDesk instalado. El ID **no** se guarda en
+texto plano — el archivo de config (`RustDesk.toml`) guarda `enc_id`
+(ofuscado/codificado internamente por RustDesk, no una API pública ni
+documentada). El flag de CLI `--get-id`/`--help` tampoco sirvió: como
+RustDesk corre permanentemente en segundo plano en cada equipo (así funciona
+el acceso remoto no atendido), cualquier invocación nueva del ejecutable solo
+le indica a la instancia ya corriendo que muestre su ventana, ignorando el
+argumento — y esto es exactamente el escenario que se va a dar en producción
+en cada máquina, no algo evitable cerrando el proceso para probar. Reimplementar
+la codificación de `enc_id` requeriría depender de un detalle interno no
+documentado del código de RustDesk, frágil ante actualizaciones. Se decidió
+con el usuario dejarlo fuera de v1: el campo se manda como `null` y se sigue
+llenando a mano en Inventario, igual que hoy. Puede retomarse como mejora
+futura si se justifica la inversión de investigar el algoritmo de `enc_id`
+en el código fuente de RustDesk.
 
 ### Manejo de fallas de red — simplificado
 
