@@ -38,6 +38,17 @@ const _kCanalLabel = {
   'general': 'General',
 };
 
+bool _usuarioEnCanal(String rol, String canal) {
+  switch (canal) {
+    case 'desarrollo':
+      return rol == 'Admin' || rol == 'Desarrollador' || rol == 'Desarrollador Sr.';
+    case 'soporte':
+      return rol != 'Desarrollador' && rol != 'Desarrollador Sr.';
+    default:
+      return true;
+  }
+}
+
 bool _mismoDia(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
 String _etiquetaFecha(DateTime fecha) {
@@ -237,6 +248,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final filtrados = widget.usuarios
         .where((u) =>
             u.username != widget.session.username &&
+            _usuarioEnCanal(u.rol, _canalActivo) &&
             (u.username.toLowerCase().contains(query.toLowerCase()) ||
                 u.nombreCompleto.toLowerCase().contains(query.toLowerCase())))
         .toList();
