@@ -92,6 +92,9 @@ Para no duplicar equipos en cada corrida periódica:
    manualmente no se duplica cuando se instala el agente en él.
 3. Si no coincide nada → **crea** un equipo nuevo con estatus
    `"Pendiente de captura"`, campos de negocio en placeholder
+   (`folio_responsiva='---'`, `valor_adquisicion=0`, `tipo='Por clasificar'`,
+   `ano_adquisicion=<año actual>`), usando `marca`/`modelo`/`no_serie` del
+   payload si vinieron (mejor esfuerzo vía BIOS/WMI), más toda la telemetría.
 
 **Importante — actualización parcial, no se pisan datos capturados a mano:**
 `rustdesk` (y en general cualquier campo que venga `null` en el payload) NO
@@ -101,9 +104,6 @@ se borraría el RustDesk ID que un admin ya había capturado a mano antes de
 instalar el agente. La actualización de cada campo de telemetría es
 "solo si el payload trae un valor no nulo", nunca un `UPDATE` incondicional
 de la fila completa.
-   (`folio_responsiva='---'`, `valor_adquisicion=0`, `tipo='Por clasificar'`,
-   `ano_adquisicion=<año actual>`), usando `marca`/`modelo`/`no_serie` del
-   payload si vinieron (mejor esfuerzo vía BIOS/WMI), más toda la telemetría.
 
 ## 3. Endpoint
 
