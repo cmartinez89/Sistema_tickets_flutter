@@ -123,6 +123,7 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   final _inputCtrl = TextEditingController();
+  final _inputFocus = FocusNode();
   final _scrollCtrl = ScrollController();
   bool _enviando = false;
   String? _imagenSeleccionada;
@@ -157,6 +158,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _iniciarRespuesta(ChatMessage msg) {
     setState(() => _respondiendoA = msg);
+    _inputFocus.requestFocus();
   }
 
   void _buscar(String query) {
@@ -208,6 +210,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _inputCtrl.removeListener(_detectarMencion);
     _inputCtrl.dispose();
+    _inputFocus.dispose();
     _scrollCtrl.dispose();
     _busquedaCtrl.dispose();
     super.dispose();
@@ -251,6 +254,7 @@ class _ChatScreenState extends State<ChatScreen> {
       selection: TextSelection.collapsed(offset: atIdx + u.username.length + 2),
     );
     setState(() => _sugerencias = []);
+    _inputFocus.requestFocus();
   }
 
   Future<void> _seleccionarImagen() async {
@@ -611,6 +615,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _inputCtrl,
+                    focusNode: _inputFocus,
                     maxLines: null,
                     textInputAction: TextInputAction.send,
                     onSubmitted: (_) => _enviar(),
