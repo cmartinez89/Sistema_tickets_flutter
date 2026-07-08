@@ -28,7 +28,8 @@ LoginScreen → MainLayout → [DashboardScreen, TicketsScreen, EquipmentScreen,
 - **Estado**: `MainLayout` como dueño central (tickets, equipos, proyectos, tareas, usuarios, mensajes), `onRefresh` callbacks
 - **Dashboard**: pantalla de entrada para todos los roles — muestra el bloque de Soporte y/o el de Desarrollo según a qué tenga acceso cada quien
 - **Proyectos/Tareas**: Kanban + Gantt por proyecto; los desarrolladores solo pueden mover (drag) las tareas que tienen asignadas, aunque ven todas las del proyecto
-- **Chat**: 3 canales (Soporte, Desarrollo, General) vía WebSocket en `/ws`, visibles según el rol
+- **Chat**: 3 canales (Soporte, Desarrollo, General) vía WebSocket en `/ws`, visibles según el rol; se puede responder a un mensaje citándolo (swipe) y buscar dentro del canal activo (ícono de lupa)
+- **Modo oscuro**: claro/oscuro/según el sistema, seleccionable desde el Drawer ("Apariencia"), persiste entre sesiones
 - **Bot Telegram**: `telegram_bot.py` — crea tickets por conversación con IA (Claude Haiku)
 - **Monitoreo**: systemd + cron cada 5 min + alertas email/Telegram
 
@@ -36,7 +37,7 @@ LoginScreen → MainLayout → [DashboardScreen, TicketsScreen, EquipmentScreen,
 
 | Rol | Acceso |
 |---|---|
-| `Admin` | Todo: tickets, inventario, catálogos, proyectos/tareas, los 3 canales de chat, gestión de usuarios |
+| `Admin` | Todo: tickets, inventario, catálogos, proyectos/tareas, los 3 canales de chat, gestión de usuarios (incluye renombrar el nombre de usuario de cualquier cuenta) |
 | `Técnico` | Solo tickets asignados a él; chat Soporte + General |
 | `Técnico Sr.` | Todos los tickets e inventario; chat Soporte + General |
 | `Desarrollador Sr.` | Solo Proyectos/Tareas/Chat — crea proyectos y tareas, asigna desarrolladores, mueve cualquier tarea; chat Desarrollo + General |
@@ -118,7 +119,7 @@ ALERT_TO=cmartinez@beta.com.mx
 - **Usuario**: username, nombre_completo, rol, email, telegram_id, area
 - **Proyecto**: nombre, descripcion, fechaInicio, fechaFin, estado (activo/pausado/terminado), responsableUsername
 - **Tarea**: proyectoId, titulo, descripcion, estado (por_hacer/haciendo/en_revision/hecho), prioridad, asignadoAUsername, fechaInicio, fechaFin
-- **Mensaje (chat)**: deUsuario, nombreCompleto, texto, imagen, fecha, canal (soporte/desarrollo/general), borrado
+- **Mensaje (chat)**: deUsuario, nombreCompleto, texto, imagen, fecha, canal (soporte/desarrollo/general), borrado, respuestaA (id del mensaje citado, opcional)
 
 ## Alertas de respaldo
 
