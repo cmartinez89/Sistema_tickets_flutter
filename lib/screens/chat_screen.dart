@@ -496,6 +496,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Mention suggestions
           if (_sugerencias.isNotEmpty)
             Container(
+              key: const ValueKey('sugerencias_mencion'),
               constraints: const BoxConstraints(maxHeight: 220),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surface,
@@ -526,6 +527,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Image preview strip
           if (_imagenSeleccionada != null)
             Container(
+              key: const ValueKey('imagen_preview'),
               color: Theme.of(context).colorScheme.surface,
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
@@ -572,6 +574,7 @@ class _ChatScreenState extends State<ChatScreen> {
           // Reply preview bar
           if (_respondiendoA != null)
             Container(
+              key: const ValueKey('respuesta_preview'),
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
               child: Row(
@@ -605,6 +608,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // Input
           Container(
+            key: const ValueKey('input_bar'),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, -2))],
