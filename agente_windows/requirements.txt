@@ -1,0 +1,6 @@
+psutil
+requests
+wmi
+pywin32
+pytest
+pyinstaller

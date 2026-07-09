@@ -1,0 +1,7 @@
+.venv/
+config.py
+build/
+dist/
+*.spec
+*.log
+__pycache__/
