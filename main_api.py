@@ -904,7 +904,8 @@ async def reportar_agente(req: AgenteReporteRequest, _auth: None = Depends(verif
     finally:
         connection.close()
     await manager.broadcast({"tipo": "equipos", "accion": "agente"})
-    return {"status": "ok", "equipoId": str(equipo_id), "accion": accion}
+    accion_respuesta = {"crear": "creado", "actualizar": "actualizado", "vincular": "vinculado"}[accion]
+    return {"status": "ok", "equipoId": str(equipo_id), "accion": accion_respuesta}
 
 # ============================================================================
 # CATALOGOS: CATEGORIAS / AREAS / TIPOS DE EQUIPO
