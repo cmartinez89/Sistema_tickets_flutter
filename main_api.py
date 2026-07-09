@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import pymysql
 import json
 import os
@@ -11,6 +11,12 @@ import requests as _requests
 from datetime import datetime, date, timedelta
 import jwt as pyjwt
 import bcrypt as _bcrypt_lib
+from agente_matching import (
+    token_valido,
+    decidir_accion_equipo,
+    campos_a_actualizar,
+    campos_equipo_nuevo,
+)
 
 # Cargar .env si existe (para ANTHROPIC_API_KEY y otras vars)
 _env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -28,6 +34,7 @@ from firebase_admin import credentials, messaging
 _jwt_secret = os.environ.get('JWT_SECRET_KEY', '')
 if not _jwt_secret:
     raise RuntimeError("JWT_SECRET_KEY no configurada en .env")
+_agent_shared_token = os.environ.get('AGENT_SHARED_TOKEN', '')
 
 def _hash_password(plain: str) -> str:
     return _bcrypt_lib.hashpw(plain.encode('utf-8'), _bcrypt_lib.gensalt()).decode('utf-8')
@@ -49,6 +56,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer
         raise HTTPException(status_code=401, detail="Sesión expirada, inicia sesión nuevamente")
     except pyjwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido")
+
+def verify_agent_token(x_agent_token: Optional[str] = Header(None)):
+    if not token_valido(x_agent_token, _agent_shared_token):
+        raise HTTPException(status_code=401, detail="Token de agente invalido")
 try:
     import anthropic as _anthropic
     _ANTHROPIC_AVAILABLE = True
@@ -331,6 +342,29 @@ class EquipoCreateRequest(BaseModel):
     comentarios: str = ''
     area: Optional[str] = None
     macAddress: Optional[str] = None
+
+class DiscoInfoRequest(BaseModel):
+    unidad: str
+    totalGb: Optional[float] = None
+    libreGb: Optional[float] = None
+
+class AgenteReporteRequest(BaseModel):
+    agenteUuid: str
+    hostname: str
+    usuarioActual: Optional[str] = None
+    soNombre: Optional[str] = None
+    soBuild: Optional[str] = None
+    cpuModelo: Optional[str] = None
+    cpuNucleos: Optional[int] = None
+    ramTotalGb: Optional[float] = None
+    discos: Optional[List[DiscoInfoRequest]] = None
+    ipLocal: Optional[str] = None
+    macAddress: Optional[str] = None
+    uptimeSegundos: Optional[int] = None
+    rustdeskId: Optional[str] = None
+    noSerie: Optional[str] = None
+    marca: Optional[str] = None
+    modelo: Optional[str] = None
 
 class EquipoUpdateRequest(BaseModel):
     tipo: str
@@ -826,6 +860,51 @@ async def dar_de_baja_equipo(equipo_id: str, current_user: dict = Depends(get_cu
         connection.close()
     await manager.broadcast({"tipo": "equipos", "accion": "baja"})
     return {"status": "success"}
+
+@app.post("/agentes/reportar")
+async def reportar_agente(req: AgenteReporteRequest, _auth: None = Depends(verify_agent_token)):
+    payload = req.model_dump()
+    connection = get_db_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM equipos WHERE agente_uuid = %s", (req.agenteUuid,))
+            equipo_uuid = cursor.fetchone()
+
+            equipo_mac = None
+            if not equipo_uuid and req.macAddress:
+                cursor.execute(
+                    "SELECT id FROM equipos WHERE mac_address = %s AND agente_uuid IS NULL",
+                    (req.macAddress,),
+                )
+                equipo_mac = cursor.fetchone()
+
+            accion, equipo_id = decidir_accion_equipo(equipo_uuid, equipo_mac)
+            campos = campos_a_actualizar(payload)
+            campos["ultimo_reporte_agente"] = datetime.now()
+
+            if accion == "crear":
+                nuevos = campos_equipo_nuevo(payload, datetime.now().year)
+                nuevos.update(campos)
+                nuevos["agente_uuid"] = req.agenteUuid
+                columnas = list(nuevos.keys())
+                valores = list(nuevos.values())
+                marcadores = ", ".join(["%s"] * len(columnas))
+                cursor.execute(
+                    f"INSERT INTO equipos ({', '.join(columnas)}) VALUES ({marcadores})",
+                    valores,
+                )
+                equipo_id = cursor.lastrowid
+            else:
+                if accion == "vincular":
+                    campos["agente_uuid"] = req.agenteUuid
+                sets = ", ".join(f"{col} = %s" for col in campos.keys())
+                valores = list(campos.values()) + [equipo_id]
+                cursor.execute(f"UPDATE equipos SET {sets} WHERE id = %s", valores)
+            connection.commit()
+    finally:
+        connection.close()
+    await manager.broadcast({"tipo": "equipos", "accion": "agente"})
+    return {"status": "ok", "equipoId": str(equipo_id), "accion": accion}
 
 # ============================================================================
 # CATALOGOS: CATEGORIAS / AREAS / TIPOS DE EQUIPO
