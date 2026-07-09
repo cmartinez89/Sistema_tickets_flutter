@@ -32,6 +32,9 @@ def campos_a_actualizar(payload):
         "ip_local": payload.get("ipLocal"),
         "mac_address": payload.get("macAddress"),
         "uptime_segundos": payload.get("uptimeSegundos"),
+        # Refleja el ultimo usuario visto, no necesariamente quien tiene sesion
+        # ahora: como nunca se pisa con null, no se limpia si la maquina
+        # se queda sin sesion iniciada en un reporte posterior.
         "usuario_actual": payload.get("usuarioActual"),
         "rustdesk": payload.get("rustdeskId"),
     }

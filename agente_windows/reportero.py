@@ -20,6 +20,8 @@ def enviar_reporte(payload, url, token, timeout=10):
 def reportar_con_reintento(payload, url, token, estado):
     pendiente = estado.leer_pendiente()
     if pendiente is not None:
+        # Resultado ignorado a proposito: el payload actual siempre reemplaza
+        # al pendiente (exitoso o no), asi que no cambia el flujo de abajo.
         enviar_reporte(pendiente, url, token)
     exito = enviar_reporte(payload, url, token)
     if exito:

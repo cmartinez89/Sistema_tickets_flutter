@@ -174,7 +174,12 @@ EQUIPO_SELECT = """
            rol_empleado AS rolEmpleado, ubicacion, anydesk, rustdesk,
            ultimo_respaldo AS ultimoRespaldo, comentarios,
            area, mac_address AS macAddress,
-           fecha_venta AS fechaVenta, precio_venta AS precioVenta
+           fecha_venta AS fechaVenta, precio_venta AS precioVenta,
+           hostname, so_nombre AS soNombre, so_build AS soBuild,
+           cpu_modelo AS cpuModelo, cpu_nucleos AS cpuNucleos,
+           ram_total_gb AS ramTotalGb, ip_local AS ipLocal,
+           uptime_segundos AS uptimeSegundos, usuario_actual AS usuarioActual,
+           ultimo_reporte_agente AS ultimoReporteAgente
     FROM equipos
 """
 
@@ -192,6 +197,8 @@ def _build_equipo(e: dict) -> dict:
         e['ultimoRespaldo'] = e['ultimoRespaldo'].isoformat()
     if isinstance(e.get('fechaVenta'), (datetime, date)):
         e['fechaVenta'] = e['fechaVenta'].isoformat() if hasattr(e['fechaVenta'], 'isoformat') else str(e['fechaVenta'])
+    if isinstance(e.get('ultimoReporteAgente'), datetime):
+        e['ultimoReporteAgente'] = e['ultimoReporteAgente'].isoformat()
     return e
 
 def _gen_folio_activo(cursor) -> str:
@@ -886,6 +893,7 @@ async def reportar_agente(req: AgenteReporteRequest, _auth: None = Depends(verif
                 nuevos = campos_equipo_nuevo(payload, datetime.now().year)
                 nuevos.update(campos)
                 nuevos["agente_uuid"] = req.agenteUuid
+                nuevos["folio_activo"] = _gen_folio_activo(cursor)
                 columnas = list(nuevos.keys())
                 valores = list(nuevos.values())
                 marcadores = ", ".join(["%s"] * len(columnas))
