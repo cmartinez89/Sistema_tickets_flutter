@@ -179,7 +179,8 @@ EQUIPO_SELECT = """
            cpu_modelo AS cpuModelo, cpu_nucleos AS cpuNucleos,
            ram_total_gb AS ramTotalGb, ip_local AS ipLocal,
            uptime_segundos AS uptimeSegundos, usuario_actual AS usuarioActual,
-           ultimo_reporte_agente AS ultimoReporteAgente
+           ultimo_reporte_agente AS ultimoReporteAgente,
+           discos_info AS discosInfo
     FROM equipos
 """
 
