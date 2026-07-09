@@ -92,6 +92,11 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     } catch (_) { return fechaStr; }
   }
 
+  String _formatFechaHora(DateTime fecha) {
+    final d = fecha.toLocal();
+    return '${d.day.toString().padLeft(2,'0')}/${d.month.toString().padLeft(2,'0')}/${d.year} ${d.hour.toString().padLeft(2,'0')}:${d.minute.toString().padLeft(2,'0')}';
+  }
+
   void _liberarHardware(Equipo eq) {
     showDialog(
       context: context,
@@ -606,6 +611,28 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                                       Text('Área: ${eq.area}', style: const TextStyle(fontSize: 12)),
                                     if (eq.macAddress != null && eq.macAddress!.isNotEmpty)
                                       Text('MAC: ${eq.macAddress}', style: const TextStyle(fontSize: 12)),
+                                    if (eq.hostname != null) ...[
+                                      const Divider(),
+                                      Text('Reportado automáticamente por el agente',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                                      const SizedBox(height: 4),
+                                      Text('Hostname: ${eq.hostname}', style: const TextStyle(fontSize: 12)),
+                                      if (eq.usuarioActual != null)
+                                        Text('Último usuario: ${eq.usuarioActual}', style: const TextStyle(fontSize: 12)),
+                                      if (eq.soNombre != null)
+                                        Text('SO: ${eq.soNombre}${eq.soBuild != null ? ' (build ${eq.soBuild})' : ''}', style: const TextStyle(fontSize: 12)),
+                                      if (eq.cpuModelo != null)
+                                        Text('CPU: ${eq.cpuModelo}${eq.cpuNucleos != null ? ' (${eq.cpuNucleos} núcleos)' : ''}', style: const TextStyle(fontSize: 12)),
+                                      if (eq.ramTotalGb != null)
+                                        Text('RAM: ${eq.ramTotalGb!.toStringAsFixed(1)} GB', style: const TextStyle(fontSize: 12)),
+                                      if (eq.ipLocal != null)
+                                        Text('IP local: ${eq.ipLocal}', style: const TextStyle(fontSize: 12)),
+                                      if (eq.uptimeFormateado != null)
+                                        Text('Encendido desde hace: ${eq.uptimeFormateado}', style: const TextStyle(fontSize: 12)),
+                                      if (eq.ultimoReporteAgente != null)
+                                        Text('Último reporte: ${_formatFechaHora(eq.ultimoReporteAgente!)}',
+                                            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                    ],
                                     Text('Especificaciones: ${eq.specifications}', style: const TextStyle(fontSize: 12)),
                                     Text('Accesorios: ${eq.accesorios}', style: const TextStyle(fontSize: 12)),
                                     Text('Año adquisición: ${eq.anoAdquisicion}', style: const TextStyle(fontSize: 12)),

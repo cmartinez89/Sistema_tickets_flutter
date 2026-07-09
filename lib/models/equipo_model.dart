@@ -24,6 +24,18 @@ class Equipo {
   String? fechaVenta;
   double? precioVenta;
 
+  // Telemetria reportada automaticamente por el agente de inventario (solo lectura).
+  String? hostname;
+  String? soNombre;
+  String? soBuild;
+  String? cpuModelo;
+  int? cpuNucleos;
+  double? ramTotalGb;
+  String? ipLocal;
+  int? uptimeSegundos;
+  String? usuarioActual;
+  DateTime? ultimoReporteAgente;
+
   Equipo({
     required this.id,
     required this.folioResponsiva,
@@ -48,6 +60,16 @@ class Equipo {
     this.folioActivo,
     this.fechaVenta,
     this.precioVenta,
+    this.hostname,
+    this.soNombre,
+    this.soBuild,
+    this.cpuModelo,
+    this.cpuNucleos,
+    this.ramTotalGb,
+    this.ipLocal,
+    this.uptimeSegundos,
+    this.usuarioActual,
+    this.ultimoReporteAgente,
   });
 
   int? get diasUltimoRespaldo {
@@ -63,6 +85,15 @@ class Equipo {
   }
 
   bool get esObsoleto => DateTime.now().year - anoAdquisicion >= 5;
+
+  String? get uptimeFormateado {
+    if (uptimeSegundos == null) return null;
+    final dias = uptimeSegundos! ~/ 86400;
+    final horas = (uptimeSegundos! % 86400) ~/ 3600;
+    if (dias > 0) return '${dias}d ${horas}h';
+    final minutos = (uptimeSegundos! % 3600) ~/ 60;
+    return horas > 0 ? '${horas}h ${minutos}m' : '${minutos}m';
+  }
 
   factory Equipo.fromMap(Map<String, dynamic> map) => Equipo(
     id: map['id'],
@@ -90,6 +121,18 @@ class Equipo {
     folioActivo: map['folioActivo'],
     fechaVenta: map['fechaVenta']?.toString(),
     precioVenta: (map['precioVenta'] as num?)?.toDouble(),
+    hostname: map['hostname'],
+    soNombre: map['soNombre'],
+    soBuild: map['soBuild'],
+    cpuModelo: map['cpuModelo'],
+    cpuNucleos: map['cpuNucleos'],
+    ramTotalGb: (map['ramTotalGb'] as num?)?.toDouble(),
+    ipLocal: map['ipLocal'],
+    uptimeSegundos: map['uptimeSegundos'],
+    usuarioActual: map['usuarioActual'],
+    ultimoReporteAgente: map['ultimoReporteAgente'] != null
+        ? DateTime.parse(map['ultimoReporteAgente'])
+        : null,
   );
 
   Map<String, dynamic> toMap() => {
