@@ -451,14 +451,6 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     printHtml(html);
   }
 
-  Widget _statusChip(String label, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-      child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     List<Equipo> lista = widget.inventario.where((e) => e.estatus != 'Baja').toList();
@@ -573,188 +565,80 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                       const SizedBox(height: 8),
                       Text('Sin resultados', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ]))
-                  : ListView.builder(
+                  : GridView.builder(
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 320,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        mainAxisExtent: 150,
+                      ),
                       itemCount: lista.length,
-                      itemBuilder: (_, i) {
-                        final eq = lista[i];
-                        final asignado = eq.estatus == 'Asignado';
-                        final vendido = eq.estatus == 'Vendido';
-                        final obsoleto = eq.esObsoleto;
-                        final fueraServicio = obsoleto && !asignado && !vendido;
-
-                        Color statusColor;
-                        String statusLabel;
-                        if (vendido) {
-                          statusColor = Colors.red.shade700;
-                          statusLabel = 'Vendido';
-                        } else if (fueraServicio) {
-                          statusColor = Colors.amber.shade800;
-                          statusLabel = 'Fuera de Servicio';
-                        } else if (asignado) {
-                          statusColor = Colors.indigo.shade700;
-                          statusLabel = 'Asignado';
-                        } else {
-                          statusColor = Colors.blue.shade700;
-                          statusLabel = 'Disponible';
-                        }
-
-                        return Card(
-                          elevation: 2,
-                          margin: const EdgeInsets.symmetric(vertical: 5),
-                          child: ExpansionTile(
-                            leading: Icon(_iconForTipo(eq.tipo), color: statusColor),
-                            title: Text('${eq.marca} - ${eq.modelo}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            subtitle: Text(
-                              'S/N: ${eq.noSerie}${eq.folioActivo != null ? ' • Activo: ${eq.folioActivo}' : ''}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            trailing: _statusChip(statusLabel, statusColor),
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (asignado) ...[
-                                      Text('Empleado: ${eq.empleadoAsignado}'),
-                                      Text('Rol: ${eq.rolEmpleado}'),
-                                      Text('Folio Responsiva: ${eq.folioResponsiva}'),
-                                    ] else if (vendido) ...[
-                                      Text('Vendido el: ${_formatFechaStr(eq.fechaVenta)}',
-                                          style: const TextStyle(color: Colors.red)),
-                                      if (eq.precioVenta != null)
-                                        Text('Precio de venta: \$${eq.precioVenta!.toStringAsFixed(2)} MXN',
-                                            style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                    ] else
-                                      Text('Disponible (Resguardo: ${eq.empleadoAsignado ?? "Sistemas"})',
-                                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
-                                    const Divider(),
-                                    if (eq.area != null && eq.area!.isNotEmpty)
-                                      Text('Área: ${eq.area}', style: const TextStyle(fontSize: 12)),
-                                    if (eq.macAddress != null && eq.macAddress!.isNotEmpty)
-                                      Text('MAC: ${eq.macAddress}', style: const TextStyle(fontSize: 12)),
-                                    if (eq.hostname != null) ...[
-                                      const Divider(),
-                                      Text('Reportado automáticamente por el agente',
-                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
-                                      const SizedBox(height: 4),
-                                      Text('Hostname: ${eq.hostname}', style: const TextStyle(fontSize: 12)),
-                                      if (eq.usuarioActual != null)
-                                        Text('Último usuario: ${eq.usuarioActual}', style: const TextStyle(fontSize: 12)),
-                                      if (eq.soNombre != null)
-                                        Text('SO: ${eq.soNombre}${eq.soBuild != null ? ' (build ${eq.soBuild})' : ''}', style: const TextStyle(fontSize: 12)),
-                                      if (eq.cpuModelo != null)
-                                        Text('CPU: ${eq.cpuModelo}${eq.cpuNucleos != null ? ' (${eq.cpuNucleos} núcleos)' : ''}', style: const TextStyle(fontSize: 12)),
-                                      if (eq.ramTotalGb != null)
-                                        Text('RAM: ${eq.ramTotalGb!.toStringAsFixed(1)} GB', style: const TextStyle(fontSize: 12)),
-                                      if (eq.ipLocal != null)
-                                        Text('IP local: ${eq.ipLocal}', style: const TextStyle(fontSize: 12)),
-                                      if (eq.uptimeFormateado != null)
-                                        Text('Encendido desde hace: ${eq.uptimeFormateado}', style: const TextStyle(fontSize: 12)),
-                                      if (eq.ultimoReporteAgente != null)
-                                        Text('Último reporte: ${_formatFechaHora(eq.ultimoReporteAgente!)}',
-                                            style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                    ],
-                                    Text('Especificaciones: ${eq.specifications}', style: const TextStyle(fontSize: 12)),
-                                    Text('Accesorios: ${eq.accesorios}', style: const TextStyle(fontSize: 12)),
-                                    Text('Año adquisición: ${eq.anoAdquisicion}', style: const TextStyle(fontSize: 12)),
-                                    Text('Valor compra: \$${eq.valorAdquisicion.toStringAsFixed(2)} MXN',
-                                        style: const TextStyle(fontSize: 12)),
-                                    Text('Valor depreciado: \$${eq.valorActual.toStringAsFixed(2)} MXN',
-                                        style: TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold)),
-                                    if (obsoleto && !vendido)
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 6),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.amber.shade50,
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(color: Colors.amber.shade300),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber.shade700),
-                                            const SizedBox(width: 4),
-                                            Text('Equipo con 5+ años — fuera de ciclo de vida',
-                                                style: TextStyle(fontSize: 11, color: Colors.amber.shade800)),
-                                          ],
-                                        ),
-                                      ),
-                                    if (_puedeGestionarActivos) ...[
-                                      const Divider(),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: [
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant),
-                                            onPressed: () => abrirDialogoNuevoEquipo(
-                                              context: context,
-                                              api: widget.api,
-                                              onRefresh: widget.onRefresh,
-                                              tiposDisponibles: _tiposEquipo,
-                                              areas: _areasDisponibles,
-                                              equipoExistente: eq,
-                                            ),
-                                            icon: const Icon(Icons.edit_rounded, size: 16),
-                                            label: const Text('Editar', style: TextStyle(fontSize: 12)),
-                                          ),
-                                          if (!vendido && !asignado)
-                                            ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                  backgroundColor: const Color(0xFFE8EAF6), foregroundColor: const Color(0xFF1A2B72)),
-                                              onPressed: () => _asignarHardware(eq),
-                                              icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
-                                              label: const Text('Asignar', style: TextStyle(fontSize: 12)),
-                                            ),
-                                          if (asignado) ...[
-                                            ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.red.shade50, foregroundColor: Colors.red.shade800),
-                                              onPressed: () => _liberarHardware(eq),
-                                              icon: const Icon(Icons.person_remove_alt_1_rounded, size: 16),
-                                              label: const Text('Liberar', style: TextStyle(fontSize: 12)),
-                                            ),
-                                            ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue.shade800),
-                                              onPressed: () => _imprimirResponsiva(eq),
-                                              icon: const Icon(Icons.print_rounded, size: 16),
-                                              label: const Text('Imprimir Responsiva', style: TextStyle(fontSize: 12)),
-                                            ),
-                                          ],
-                                          if (obsoleto && !vendido)
-                                            ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.orange.shade50, foregroundColor: Colors.orange.shade800),
-                                              onPressed: () => _venderHardware(eq),
-                                              icon: const Icon(Icons.sell_rounded, size: 16),
-                                              label: const Text('Marcar como Vendido', style: TextStyle(fontSize: 12)),
-                                            ),
-                                          if (!vendido)
-                                            ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest, foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant),
-                                              onPressed: () => _darDeBajaHardware(eq),
-                                              icon: const Icon(Icons.remove_circle_outline_rounded, size: 16),
-                                              label: const Text('Dar de baja', style: TextStyle(fontSize: 12)),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
+                      itemBuilder: (_, i) => _tarjetaEquipo(lista[i]),
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tarjetaEquipo(Equipo eq) {
+    final color = colorParaEstatus(eq.estatus);
+    final titulo = eq.empleadoAsignado ?? eq.estatus;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      elevation: 2,
+      child: InkWell(
+        onTap: () => _mostrarDetalle(eq),
+        child: Container(
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            border: Border(left: BorderSide(color: color, width: 4)),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(_iconForTipo(eq.tipo), color: color, size: 18),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(titulo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text('${eq.marca} - ${eq.modelo}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              if (eq.hostname != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Hostname: ${eq.hostname}${eq.rustdesk.isNotEmpty ? ' · RustDesk: ${eq.rustdesk}' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                resumenSpecs(eq),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontStyle: eq.hostname == null ? FontStyle.italic : FontStyle.normal,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
