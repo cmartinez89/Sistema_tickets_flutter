@@ -1,3 +1,19 @@
+import 'dart:convert';
+
+class DiscoInfo {
+  final String unidad;
+  final double? totalGb;
+  final double? libreGb;
+
+  const DiscoInfo({required this.unidad, this.totalGb, this.libreGb});
+
+  factory DiscoInfo.fromMap(Map<String, dynamic> map) => DiscoInfo(
+    unidad: map['unidad'] ?? '',
+    totalGb: (map['totalGb'] as num?)?.toDouble(),
+    libreGb: (map['libreGb'] as num?)?.toDouble(),
+  );
+}
+
 class Equipo {
   final String id;
   String folioResponsiva;
@@ -35,6 +51,7 @@ class Equipo {
   int? uptimeSegundos;
   String? usuarioActual;
   DateTime? ultimoReporteAgente;
+  List<DiscoInfo>? discos;
 
   Equipo({
     required this.id,
@@ -70,6 +87,7 @@ class Equipo {
     this.uptimeSegundos,
     this.usuarioActual,
     this.ultimoReporteAgente,
+    this.discos,
   });
 
   int? get diasUltimoRespaldo {
@@ -132,6 +150,11 @@ class Equipo {
     usuarioActual: map['usuarioActual'],
     ultimoReporteAgente: map['ultimoReporteAgente'] != null
         ? DateTime.parse(map['ultimoReporteAgente'])
+        : null,
+    discos: map['discosInfo'] != null
+        ? (jsonDecode(map['discosInfo']) as List)
+            .map((d) => DiscoInfo.fromMap(d as Map<String, dynamic>))
+            .toList()
         : null,
   );
 
