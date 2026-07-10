@@ -5,6 +5,29 @@ import '../services/api_service.dart';
 import '../utils/print_helper.dart';
 import 'dialogo_nuevo_equipo.dart';
 
+Color colorParaEstatus(String estatus) {
+  switch (estatus) {
+    case 'Asignado':
+      return Colors.green.shade700;
+    case 'Disponible':
+      return Colors.red.shade700;
+    default:
+      return Colors.amber.shade800;
+  }
+}
+
+String resumenSpecs(Equipo eq) {
+  final partes = <String>[];
+  if (eq.cpuNucleos != null) partes.add('${eq.cpuNucleos} núcleos');
+  if (eq.ramTotalGb != null) partes.add('${eq.ramTotalGb!.toStringAsFixed(1)} GB RAM');
+  if (eq.discos != null && eq.discos!.isNotEmpty) {
+    final totalGb = eq.discos!.fold<double>(0, (sum, d) => sum + (d.totalGb ?? 0));
+    partes.add('${totalGb.toStringAsFixed(0)} GB disco');
+  }
+  if (partes.isEmpty) return 'Sin datos del agente';
+  return partes.join(' • ');
+}
+
 class EquipmentScreen extends StatefulWidget {
   final List<Equipo> inventario;
   final Session session;
