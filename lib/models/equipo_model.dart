@@ -14,6 +14,20 @@ class DiscoInfo {
   );
 }
 
+// Un JSON malformado en un solo registro no debe tumbar la carga de todo
+// el inventario: si el parseo falla, ese equipo simplemente se queda sin
+// info de disco en vez de propagar la excepcion.
+List<DiscoInfo>? _parseDiscos(dynamic discosInfo) {
+  if (discosInfo == null) return null;
+  try {
+    return (jsonDecode(discosInfo as String) as List)
+        .map((d) => DiscoInfo.fromMap(d as Map<String, dynamic>))
+        .toList();
+  } catch (_) {
+    return null;
+  }
+}
+
 class Equipo {
   final String id;
   String folioResponsiva;
@@ -151,11 +165,7 @@ class Equipo {
     ultimoReporteAgente: map['ultimoReporteAgente'] != null
         ? DateTime.parse(map['ultimoReporteAgente'])
         : null,
-    discos: map['discosInfo'] != null
-        ? (jsonDecode(map['discosInfo']) as List)
-            .map((d) => DiscoInfo.fromMap(d as Map<String, dynamic>))
-            .toList()
-        : null,
+    discos: _parseDiscos(map['discosInfo']),
   );
 
   Map<String, dynamic> toMap() => {

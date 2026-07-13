@@ -381,6 +381,10 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
               children: [
                 Text('${eq.marca} - ${eq.modelo}',
                     style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                Text(
+                  'S/N: ${eq.noSerie}${eq.folioActivo != null ? ' • Activo: ${eq.folioActivo}' : ''}',
+                  style: const TextStyle(fontSize: 12),
+                ),
                 if (eq.hostname != null)
                   Text('Hostname: ${eq.hostname}', style: const TextStyle(fontSize: 12)),
                 if (eq.rustdesk.isNotEmpty)
@@ -487,6 +491,8 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                   Text('Área: ${eq.area}', style: const TextStyle(fontSize: 12)),
                 if (eq.macAddress != null && eq.macAddress!.isNotEmpty)
                   Text('MAC: ${eq.macAddress}', style: const TextStyle(fontSize: 12)),
+                if (eq.usuarioActual != null)
+                  Text('Último usuario: ${eq.usuarioActual}', style: const TextStyle(fontSize: 12)),
                 if (eq.soNombre != null)
                   Text('SO: ${eq.soNombre}${eq.soBuild != null ? ' (build ${eq.soBuild})' : ''}',
                       style: const TextStyle(fontSize: 12)),
@@ -809,6 +815,12 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(
+                'S/N: ${eq.noSerie}${eq.folioActivo != null ? ' • Activo: ${eq.folioActivo}' : ''}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
               if (eq.hostname != null) ...[
                 const SizedBox(height: 4),
                 Text(
@@ -819,16 +831,19 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
                 ),
               ],
               const SizedBox(height: 4),
-              Text(
-                resumenSpecs(eq),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontStyle: eq.hostname == null ? FontStyle.italic : FontStyle.normal,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
+              Builder(builder: (_) {
+                final specs = resumenSpecs(eq);
+                return Text(
+                  specs,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontStyle: specs == 'Sin datos del agente' ? FontStyle.italic : FontStyle.normal,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                );
+              }),
             ],
           ),
         ),
