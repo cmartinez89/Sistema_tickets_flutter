@@ -58,6 +58,8 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       widget.session.rol == 'Desarrollador Sr.' ||
       widget.session.rol == 'Desarrollador';
   bool get _esAdmin => widget.session.rol == 'Admin';
+  bool get _puedeAdministrarCatalogos =>
+      widget.session.rol == 'Admin' || widget.session.rol == 'Técnico Sr.';
 
   // Índice 0 es el Dashboard, siempre presente para toda sesión.
   int get _devOffset => 1 + (_tieneSoporte ? 3 : 0);
@@ -338,7 +340,11 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       ),
       if (_esAdmin) ...[
         UsersScreen(usuarios: _usuarios, api: _api, session: widget.session, onRefresh: _cargarUsuarios),
+      ],
+      if (_puedeAdministrarCatalogos) ...[
         AdminScreen(api: _api),
+      ],
+      if (_esAdmin) ...[
         ReportesScreen(api: _api),
         AiScreen(api: _api, session: widget.session),
       ],
@@ -416,13 +422,15 @@ class _MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                 },
               ),
               // ── Administración ───────────────────────────────────────
-              if (_esAdmin) ...[
+              if (_puedeAdministrarCatalogos) ...[
                 const Divider(indent: 16, endIndent: 16),
                 _sectionHeader('Administración'),
-                _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', adminOffset),
-                _item(Icons.settings_rounded, 'Administración', adminOffset + 1),
-                _item(Icons.bar_chart_rounded, 'Reportes', adminOffset + 2),
-                _item(Icons.smart_toy_rounded, 'Asistente IA', adminOffset + 3),
+                if (_esAdmin) _item(Icons.manage_accounts_rounded, 'Gestión de Usuarios', adminOffset),
+                _item(Icons.settings_rounded, 'Administración', adminOffset + (_esAdmin ? 1 : 0)),
+                if (_esAdmin) ...[
+                  _item(Icons.bar_chart_rounded, 'Reportes', adminOffset + 2),
+                  _item(Icons.smart_toy_rounded, 'Asistente IA', adminOffset + 3),
+                ],
               ],
             ],
           ),
