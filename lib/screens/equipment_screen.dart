@@ -353,6 +353,198 @@ class _EquipmentScreenState extends State<EquipmentScreen> {
     );
   }
 
+  void _mostrarDetalle(Equipo eq) {
+    final asignado = eq.estatus == 'Asignado';
+    final vendido = eq.estatus == 'Vendido';
+    final obsoleto = eq.esObsoleto;
+    final color = colorParaEstatus(eq.estatus);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(_iconForTipo(eq.tipo), color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(eq.empleadoAsignado ?? eq.estatus,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${eq.marca} - ${eq.modelo}',
+                    style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                if (eq.hostname != null)
+                  Text('Hostname: ${eq.hostname}', style: const TextStyle(fontSize: 12)),
+                if (eq.rustdesk.isNotEmpty)
+                  Text('RustDesk: ${eq.rustdesk}', style: const TextStyle(fontSize: 12)),
+                if (_puedeGestionarActivos) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                            foregroundColor: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          abrirDialogoNuevoEquipo(
+                            context: context,
+                            api: widget.api,
+                            onRefresh: widget.onRefresh,
+                            tiposDisponibles: _tiposEquipo,
+                            areas: _areasDisponibles,
+                            equipoExistente: eq,
+                          );
+                        },
+                        icon: const Icon(Icons.edit_rounded, size: 16),
+                        label: const Text('Editar', style: TextStyle(fontSize: 12)),
+                      ),
+                      if (!vendido && !asignado)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE8EAF6), foregroundColor: const Color(0xFF1A2B72)),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _asignarHardware(eq);
+                          },
+                          icon: const Icon(Icons.person_add_alt_1_rounded, size: 16),
+                          label: const Text('Asignar', style: TextStyle(fontSize: 12)),
+                        ),
+                      if (asignado) ...[
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade50, foregroundColor: Colors.red.shade800),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _liberarHardware(eq);
+                          },
+                          icon: const Icon(Icons.person_remove_alt_1_rounded, size: 16),
+                          label: const Text('Liberar', style: TextStyle(fontSize: 12)),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade50, foregroundColor: Colors.blue.shade800),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _imprimirResponsiva(eq);
+                          },
+                          icon: const Icon(Icons.print_rounded, size: 16),
+                          label: const Text('Imprimir Responsiva', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                      if (obsoleto && !vendido)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange.shade50, foregroundColor: Colors.orange.shade800),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _venderHardware(eq);
+                          },
+                          icon: const Icon(Icons.sell_rounded, size: 16),
+                          label: const Text('Marcar como Vendido', style: TextStyle(fontSize: 12)),
+                        ),
+                      if (!vendido)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(ctx).colorScheme.surfaceContainerHighest,
+                              foregroundColor: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _darDeBajaHardware(eq);
+                          },
+                          icon: const Icon(Icons.remove_circle_outline_rounded, size: 16),
+                          label: const Text('Dar de baja', style: TextStyle(fontSize: 12)),
+                        ),
+                    ],
+                  ),
+                ],
+                const Divider(height: 24),
+                if (asignado) ...[
+                  Text('Empleado: ${eq.empleadoAsignado}'),
+                  Text('Rol: ${eq.rolEmpleado}'),
+                  Text('Folio Responsiva: ${eq.folioResponsiva}'),
+                ] else if (vendido) ...[
+                  Text('Vendido el: ${_formatFechaStr(eq.fechaVenta)}',
+                      style: const TextStyle(color: Colors.red)),
+                  if (eq.precioVenta != null)
+                    Text('Precio de venta: \$${eq.precioVenta!.toStringAsFixed(2)} MXN',
+                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                ] else
+                  Text('Disponible (Resguardo: ${eq.empleadoAsignado ?? "Sistemas"})',
+                      style: TextStyle(color: Theme.of(ctx).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
+                const Divider(),
+                if (eq.area != null && eq.area!.isNotEmpty)
+                  Text('Área: ${eq.area}', style: const TextStyle(fontSize: 12)),
+                if (eq.macAddress != null && eq.macAddress!.isNotEmpty)
+                  Text('MAC: ${eq.macAddress}', style: const TextStyle(fontSize: 12)),
+                if (eq.soNombre != null)
+                  Text('SO: ${eq.soNombre}${eq.soBuild != null ? ' (build ${eq.soBuild})' : ''}',
+                      style: const TextStyle(fontSize: 12)),
+                if (eq.cpuModelo != null)
+                  Text('CPU: ${eq.cpuModelo}${eq.cpuNucleos != null ? ' (${eq.cpuNucleos} núcleos)' : ''}',
+                      style: const TextStyle(fontSize: 12)),
+                if (eq.ipLocal != null)
+                  Text('IP local: ${eq.ipLocal}', style: const TextStyle(fontSize: 12)),
+                if (eq.ramTotalGb != null)
+                  Text('RAM: ${eq.ramTotalGb!.toStringAsFixed(1)} GB', style: const TextStyle(fontSize: 12)),
+                if (eq.discos != null)
+                  for (final d in eq.discos!)
+                    Text(
+                      'Disco ${d.unidad}: ${d.totalGb?.toStringAsFixed(1) ?? "?"} GB total, ${d.libreGb?.toStringAsFixed(1) ?? "?"} GB libres',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                if (eq.uptimeFormateado != null)
+                  Text('Encendido desde hace: ${eq.uptimeFormateado}', style: const TextStyle(fontSize: 12)),
+                if (eq.ultimoReporteAgente != null)
+                  Text('Último reporte del agente: ${_formatFechaHora(eq.ultimoReporteAgente!)}',
+                      style: TextStyle(fontSize: 11, color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                Text('Especificaciones: ${eq.specifications}', style: const TextStyle(fontSize: 12)),
+                Text('Accesorios: ${eq.accesorios}', style: const TextStyle(fontSize: 12)),
+                Text('Año adquisición: ${eq.anoAdquisicion}', style: const TextStyle(fontSize: 12)),
+                Text('Valor de Adquisición: \$${eq.valorAdquisicion.toStringAsFixed(2)} MXN',
+                    style: const TextStyle(fontSize: 12)),
+                Text('Valor Depreciado: \$${eq.valorActual.toStringAsFixed(2)} MXN',
+                    style: const TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                if (obsoleto && !vendido)
+                  Container(
+                    margin: const EdgeInsets.only(top: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber.shade700),
+                        const SizedBox(width: 4),
+                        Text('Equipo con 5+ años — fuera de ciclo de vida',
+                            style: TextStyle(fontSize: 11, color: Colors.amber.shade800)),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
   void _imprimirResponsiva(Equipo eq) {
     final now = DateTime.now();
     final dia = now.day.toString().padLeft(2, '0');
