@@ -260,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         keyboardType: TextInputType.emailAddress,
                         decoration: const InputDecoration(
                           labelText: 'Usuario o correo',
-                          hintText: 'cmartinez o cmartinez@beta.com.mx',
+                          hintText: 'usuario o correo@beta.com.mx',
                           border: OutlineInputBorder(),
                           prefixIcon: Icon(Icons.person_outline_rounded),
                         ),
